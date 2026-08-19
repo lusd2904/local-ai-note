@@ -244,22 +244,11 @@ export default function Sidebar({
 
   return (
     <aside className="w-64 bg-mac-sidebar dark:bg-mac-sidebarDark border-r border-mac-border dark:border-mac-borderDark flex flex-col h-screen select-none shrink-0 transition-colors">
-      {/* 顶部 macOS 原生交通灯预留区域 */}
+      {/* 顶部 macOS 原生交通灯预留拖拽区域 */}
       <div 
         style={{ WebkitAppRegion: 'drag' }}
-        className="h-12 pl-20 pr-4 flex items-center border-b border-mac-border/50 dark:border-mac-borderDark/50 shrink-0 cursor-default"
-      >
-        <div className="flex items-center space-x-2">
-          <img 
-            src="/app_logo.png" 
-            alt="Note" 
-            className="w-7 h-7 rounded-lg shadow-sm object-cover select-none pointer-events-none" 
-          />
-          <span className="text-xs font-bold text-gray-700 dark:text-gray-200 tracking-wider font-mono">
-            Note
-          </span>
-        </div>
-      </div>
+        className="h-12 border-b border-mac-border/50 dark:border-mac-borderDark/50 shrink-0 cursor-default"
+      />
 
       {/* 导航菜单 */}
       <div className="flex-1 overflow-y-auto px-2 py-3 space-y-1">
