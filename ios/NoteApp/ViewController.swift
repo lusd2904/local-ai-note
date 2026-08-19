@@ -67,7 +67,23 @@ class ViewController: UIViewController, WKUIDelegate, WKNavigationDelegate, WKSc
         // 极速加载手机内部嵌入式纯本地 HTTP 服务 (100% 独立离线，零网络依赖)
         let localPort = LocalHttpServer.shared.port
         let appUrl = URL(string: "http://127.0.0.1:\(localPort)/index.html")!
-        print("🚀 [iOS] Loading standalone local app at: \(appUrl)")
+        NSLog("🚀 [iOS] Loading standalone local app at: \(appUrl.absoluteString)")
+
+        // 调试：检查 Bundle 中是否有 www 目录
+        if let wwwPath = Bundle.main.path(forResource: "www", ofType: nil) {
+            NSLog("✅ [Debug] www 目录存在: \(wwwPath)")
+            if let files = try? FileManager.default.contentsOfDirectory(atPath: wwwPath) {
+                NSLog("✅ [Debug] www 文件数量: \(files.count)")
+                NSLog("✅ [Debug] www 文件列表: \(files.prefix(5).joined(separator: ", "))")
+            }
+        } else {
+            NSLog("❌ [Debug] www 目录不存在于 Bundle 中！")
+            NSLog("❌ [Debug] Bundle path: \(Bundle.main.bundlePath)")
+            if let contents = try? FileManager.default.contentsOfDirectory(atPath: Bundle.main.bundlePath) {
+                NSLog("❌ [Debug] Bundle 内容: \(contents.prefix(10).joined(separator: ", "))")
+            }
+        }
+
         webView.load(URLRequest(url: appUrl, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10))
     }
 

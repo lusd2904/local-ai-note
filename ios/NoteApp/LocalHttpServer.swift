@@ -98,16 +98,33 @@ class LocalHttpServer {
         
         // 查找 Bundle 内部的 www 静态资源
         var targetUrl: URL? = nil
+
+        // 方法 1: 使用 Bundle.main.url
         if let rUrl = Bundle.main.url(forResource: rawPath, withExtension: nil, subdirectory: "www") {
+            print("✅ [LocalServer] 方法1找到文件: \(rawPath)")
             targetUrl = rUrl
         } else {
+            // 方法 2: 直接拼接路径
             let u1 = Bundle.main.bundleURL.appendingPathComponent("www").appendingPathComponent(rawPath)
             if FileManager.default.fileExists(atPath: u1.path) {
+                print("✅ [LocalServer] 方法2找到文件: \(rawPath) at \(u1.path)")
                 targetUrl = u1
             } else {
+                // 方法 3: 不带 www 目录
                 let u2 = Bundle.main.bundleURL.appendingPathComponent(rawPath)
                 if FileManager.default.fileExists(atPath: u2.path) {
+                    print("✅ [LocalServer] 方法3找到文件: \(rawPath) at \(u2.path)")
                     targetUrl = u2
+                } else {
+                    print("❌ [LocalServer] 找不到文件: \(rawPath)")
+                    print("❌ [LocalServer] 尝试路径1: \(u1.path)")
+                    print("❌ [LocalServer] 尝试路径2: \(u2.path)")
+                    print("❌ [LocalServer] Bundle路径: \(Bundle.main.bundlePath)")
+
+                    // 列出 Bundle 内容
+                    if let contents = try? FileManager.default.contentsOfDirectory(atPath: Bundle.main.bundlePath) {
+                        print("❌ [LocalServer] Bundle 内容: \(contents.prefix(10))")
+                    }
                 }
             }
         }

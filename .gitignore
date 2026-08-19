@@ -68,3 +68,10 @@ htmlcov/
 Note.app/
 LocalNote.app/
 *.app
+
+# Xcode / iOS 构建与用户状态缓存
+xcuserdata/
+*.xcuserdatad/
+*.xcuserstate
+*.xcbkptlist
+DerivedData/
