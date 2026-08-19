@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { 
   BookOpen, Folder, FolderPlus, Star, Trash2, Mic, 
   Settings, Moon, Sun, ChevronRight, ChevronDown, Plus, 
-  Edit2, Check, X, CornerDownRight, Bot, Sparkles, ExternalLink, Globe
+  Edit2, Check, X, CornerDownRight, Bot, Sparkles, ExternalLink, Globe,
+  ArrowRightLeft
 } from 'lucide-react';
 
 // 将扁平笔记本数组转换为树形结构
@@ -213,6 +214,7 @@ export default function Sidebar({
   trashNotesCount,
   starredNotesCount,
   audioRecordsCount,
+  onOpenSyncModal,
   onBatchImport
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -552,17 +554,30 @@ export default function Sidebar({
           className="flex items-center space-x-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition"
         >
           <Settings className="w-4 h-4" />
-          <span>AI 与偏好设置</span>
+          <span>设置</span>
         </button>
 
-        <button
-          onClick={onToggleDarkMode}
-          style={{ WebkitAppRegion: 'no-drag' }}
-          className="p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition"
-          title={darkMode ? "切换到明亮模式" : "切换到暗黑模式"}
-        >
-          {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-600" />}
-        </button>
+        <div className="flex items-center space-x-1">
+          {/* 多端同步快捷入口 */}
+          <button
+            onClick={onOpenSyncModal}
+            style={{ WebkitAppRegion: 'no-drag' }}
+            className="p-1.5 text-gray-500 hover:text-blue-500 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition"
+            title="多端局域网双向同步与配对"
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+          </button>
+
+          {/* 暗黑/明亮模式切换 */}
+          <button
+            onClick={onToggleDarkMode}
+            style={{ WebkitAppRegion: 'no-drag' }}
+            className="p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition"
+            title={darkMode ? "切换到明亮模式" : "切换到暗黑模式"}
+          >
+            {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-600" />}
+          </button>
+        </div>
       </div>
     </aside>
   );

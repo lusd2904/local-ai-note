@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import settings, UPLOAD_DIR, AUDIO_DIR, IMAGES_DIR
 from .database import engine, Base, SessionLocal
 from .models import Notebook, Note, AISetting
-from .routers import notebooks, notes, audio, ai, upload
+from .routers import notebooks, notes, audio, ai, upload, sync
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ app = FastAPI(
     version=settings.VERSION
 )
 
-# CORS 跨域配置（允许本地前端访问）
+# CORS 跨域配置（允许本地与局域网移动端前端访问）
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -41,6 +41,7 @@ app.include_router(notes.router)
 app.include_router(audio.router)
 app.include_router(ai.router)
 app.include_router(upload.router)
+app.include_router(sync.router)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

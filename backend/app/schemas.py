@@ -142,3 +142,74 @@ class AISettingOut(BaseModel):
         from_attributes = True
 
 
+# ----------------- 局域网配对与多端双向同步 (Sync) -----------------
+class SyncInfoOut(BaseModel):
+    server_ip: str
+    port: int
+    device_name: str
+    pairing_code: str
+    token: str
+    qr_data: str
+
+class SyncPairRequest(BaseModel):
+    device_id: str
+    device_name: str
+    pairing_code: str
+
+class SyncPairOut(BaseModel):
+    status: str
+    token: str
+    server_name: str
+    server_time: datetime
+
+class SyncItemDict(BaseModel):
+    pass
+
+class SyncPullRequest(BaseModel):
+    last_sync_time: Optional[datetime] = None
+    token: Optional[str] = None
+
+class SyncPullOut(BaseModel):
+    notebooks: List[Dict[str, Any]] = []
+    notes: List[Dict[str, Any]] = []
+    audio_records: List[Dict[str, Any]] = []
+    deleted_note_ids: List[str] = []
+    deleted_notebook_ids: List[str] = []
+    sync_timestamp: datetime
+
+class SyncPushRequest(BaseModel):
+    notebooks: List[Dict[str, Any]] = []
+    notes: List[Dict[str, Any]] = []
+    audio_records: List[Dict[str, Any]] = []
+    deleted_note_ids: List[str] = []
+    deleted_notebook_ids: List[str] = []
+    token: Optional[str] = None
+
+class SyncPushOut(BaseModel):
+    status: str
+    inserted_notes: int
+    updated_notes: int
+    inserted_notebooks: int
+    updated_notebooks: int
+    sync_timestamp: datetime
+
+class SyncTwoWayRequest(BaseModel):
+    last_sync_time: Optional[datetime] = None
+    notebooks: List[Dict[str, Any]] = []
+    notes: List[Dict[str, Any]] = []
+    audio_records: List[Dict[str, Any]] = []
+    deleted_note_ids: List[str] = []
+    deleted_notebook_ids: List[str] = []
+    token: Optional[str] = None
+
+class SyncTwoWayOut(BaseModel):
+    status: str
+    server_notebooks: List[Dict[str, Any]] = []
+    server_notes: List[Dict[str, Any]] = []
+    server_audio_records: List[Dict[str, Any]] = []
+    server_deleted_note_ids: List[str] = []
+    server_deleted_notebook_ids: List[str] = []
+    sync_timestamp: datetime
+    stats: Dict[str, Any] = {}
+
+

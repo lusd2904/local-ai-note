@@ -6,6 +6,7 @@ import AudioStudio from './components/AudioStudio';
 import AICopilotModal from './components/AICopilotModal';
 import MindMapModal from './components/MindMapModal';
 import SettingsModal from './components/SettingsModal';
+import SyncModal from './components/SyncModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import AIConsultationView from './components/AIConsultationView';
 import EmbeddedWebAIView from './components/EmbeddedWebAIView';
@@ -39,6 +40,7 @@ export default function App() {
   const [isMindMapOpen, setIsMindMapOpen] = useState(false);
   const [mindMapContent, setMindMapContent] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
 
   // 初始化加载
   useEffect(() => {
@@ -394,6 +396,7 @@ export default function App() {
           trashNotesCount={trashCount}
           starredNotesCount={starredCount}
           audioRecordsCount={audioRecords.length}
+          onOpenSyncModal={() => setIsSyncModalOpen(true)}
           onBatchImport={handleBatchImport}
         />
 
@@ -487,6 +490,16 @@ export default function App() {
         <SettingsModal
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
+        />
+
+        {/* 6. 多端局域网双向同步与配对弹窗 */}
+        <SyncModal
+          isOpen={isSyncModalOpen}
+          onClose={() => setIsSyncModalOpen(false)}
+          onSyncComplete={async () => {
+            await fetchNotes();
+            await fetchNotebooks();
+          }}
         />
       </div>
     </ErrorBoundary>
