@@ -126,7 +126,6 @@ function EditorCore({
       TableCell,
       HorizontalRule,
       Underline,
-      Strike,
       Image.configure({
         inline: true,
         allowBase64: true,
