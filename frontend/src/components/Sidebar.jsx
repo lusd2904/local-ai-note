@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { 
   BookOpen, Folder, FolderPlus, Star, Trash2, Mic, 
   Settings, Moon, Sun, ChevronRight, ChevronDown, Plus, 
-  Edit2, Check, X, CornerDownRight, Bot, Sparkles, ExternalLink, Globe,
-  Download
+  Edit2, Check, X, CornerDownRight, Bot, Sparkles, ExternalLink, Globe
 } from 'lucide-react';
 
 // 将扁平笔记本数组转换为树形结构
@@ -248,30 +247,18 @@ export default function Sidebar({
       {/* 顶部 macOS 原生交通灯预留区域 */}
       <div 
         style={{ WebkitAppRegion: 'drag' }}
-        className="h-12 pl-20 pr-4 flex items-center justify-between border-b border-mac-border/50 dark:border-mac-borderDark/50 shrink-0 cursor-default"
+        className="h-12 pl-20 pr-4 flex items-center border-b border-mac-border/50 dark:border-mac-borderDark/50 shrink-0 cursor-default"
       >
-        <span className="text-xs font-bold text-gray-500 dark:text-gray-400 tracking-wider">
-          NOTE
-        </span>
-        <label
-          style={{ WebkitAppRegion: 'no-drag' }}
-          className="cursor-pointer p-1 text-gray-400 hover:text-blue-500 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition"
-          title="批量导入本地笔记 (.md, .txt)"
-        >
-          <input 
-            type="file" 
-            multiple 
-            accept=".md,.txt" 
-            className="hidden" 
-            onChange={(e) => {
-              if (e.target.files && e.target.files.length > 0) {
-                onBatchImport(e.target.files);
-              }
-              e.target.value = ''; // 允许重复选择同名文件
-            }} 
+        <div className="flex items-center space-x-2">
+          <img 
+            src="/app_logo.png" 
+            alt="Note" 
+            className="w-7 h-7 rounded-lg shadow-sm object-cover select-none pointer-events-none" 
           />
-          <Download className="w-4 h-4" />
-        </label>
+          <span className="text-xs font-bold text-gray-700 dark:text-gray-200 tracking-wider font-mono">
+            Note
+          </span>
+        </div>
       </div>
 
       {/* 导航菜单 */}
