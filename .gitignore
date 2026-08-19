@@ -2,8 +2,7 @@
 # 隐私数据与本地持久化文件 (严禁上传)
 # ==============================================================================
 .env
-.env.local
-.env.*.local
+.env.*
 *.env
 data/
 backups/
@@ -13,6 +12,9 @@ backups/
 uploads/
 *.log
 next_plan.md
+SECURITY_*.md
+test_*.py
+*.test.py
 
 # macOS 系统缓存
 .DS_Store
