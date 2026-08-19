@@ -10,6 +10,7 @@
 		60D9F840785B3B94F8B62325 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DB925ED1642B598A5CD88CD /* SceneDelegate.swift */; };
 		617DFCAE50C689DC4FB15F88 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 328FD2CDB03E16807F002D2B /* Assets.xcassets */; };
 		817B21F5AEBAADAB2E6FF735 /* www in Resources */ = {isa = PBXBuildFile; fileRef = A49C4E9D9A3F3629049E67B2 /* www */; };
+		B87218D150B1AD1930CD58BF /* LocalHttpServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9771E8BD5AC3FEB4B3B84B5E /* LocalHttpServer.swift */; };
 		E59C10DFDF737C2B1EE0B3D8 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F40D072F2BA3495FF33936 /* ViewController.swift */; };
 		FC279C9912C3BB1BA68B7BBA /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27E4EAB2C6BD5DFFAF47387 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
@@ -19,6 +20,7 @@
 		328FD2CDB03E16807F002D2B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3DB925ED1642B598A5CD88CD /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		82F40D072F2BA3495FF33936 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		9771E8BD5AC3FEB4B3B84B5E /* LocalHttpServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalHttpServer.swift; sourceTree = "<group>"; };
 		A27E4EAB2C6BD5DFFAF47387 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A49C4E9D9A3F3629049E67B2 /* www */ = {isa = PBXFileReference; lastKnownFileType = folder; name = www; path = NoteApp/www; sourceTree = SOURCE_ROOT; };
 		AA62C9D0FEAA6D4DB6B12F8F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -31,6 +33,7 @@
 				A27E4EAB2C6BD5DFFAF47387 /* AppDelegate.swift */,
 				328FD2CDB03E16807F002D2B /* Assets.xcassets */,
 				AA62C9D0FEAA6D4DB6B12F8F /* Info.plist */,
+				9771E8BD5AC3FEB4B3B84B5E /* LocalHttpServer.swift */,
 				3DB925ED1642B598A5CD88CD /* SceneDelegate.swift */,
 				82F40D072F2BA3495FF33936 /* ViewController.swift */,
 				A49C4E9D9A3F3629049E67B2 /* www */,
@@ -127,6 +130,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FC279C9912C3BB1BA68B7BBA /* AppDelegate.swift in Sources */,
+				B87218D150B1AD1930CD58BF /* LocalHttpServer.swift in Sources */,
 				60D9F840785B3B94F8B62325 /* SceneDelegate.swift in Sources */,
 				E59C10DFDF737C2B1EE0B3D8 /* ViewController.swift in Sources */,
 			);

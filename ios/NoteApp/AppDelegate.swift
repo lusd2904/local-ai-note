@@ -9,6 +9,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
+        // 启动手机本地 100% 独立离线服务
+        LocalHttpServer.shared.start()
+
         if #available(iOS 13.0, *) {
             // iOS 13+ 由 SceneDelegate 接管窗口生命周期
         } else {
