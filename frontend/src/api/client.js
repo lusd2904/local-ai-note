@@ -165,4 +165,16 @@ export const batchImportNotes = (files) => {
   }).then(res => res.data);
 };
 
+// 知识图谱与双向链接
+export const getKnowledgeGraph = () => api.get('/notes/graph/data').then(res => res.data);
+export const getNoteBacklinks = (id) => api.get(`/notes/${id}/backlinks`).then(res => res.data);
+
+// 闪念速记 (Memos)
+export const getMemos = (params = {}) => api.get('/memos', { params }).then(res => res.data);
+export const createMemo = (data) => api.post('/memos', data).then(res => res.data);
+export const updateMemo = (id, data) => api.put(`/memos/${id}`, data).then(res => res.data);
+export const deleteMemo = (id) => api.delete(`/memos/${id}`).then(res => res.data);
+export const convertMemosToNote = (data) => api.post('/memos/convert-to-note', data).then(res => res.data);
+
 export default api;
+

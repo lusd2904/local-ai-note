@@ -78,18 +78,19 @@ export class SyncService {
 
     const cleanUrl = serverUrl.replace(/\/+$/, '');
 
-    // M2: 仅获取自上次同步以来变动的增量数据（而非全量），减少传输量
-    // C4: 使用 includeAll=true 确保废纸篓中的笔记也参与同步
     const allLocalNotes = await localDb.getNotes({ includeAll: true });
     const localNotebooks = await localDb.getNotebooks();
+    const allLocalMemos = await localDb.getMemos({ is_archived: undefined });
 
     // M2: 如果有上次同步时间，只推送有更新的记录
     let notesToPush = allLocalNotes;
     let notebooksToPush = localNotebooks;
+    let memosToPush = allLocalMemos;
     if (lastSyncTime) {
       const lastSyncDate = new Date(lastSyncTime);
       notesToPush = allLocalNotes.filter(n => new Date(n.updated_at) > lastSyncDate);
       notebooksToPush = localNotebooks.filter(nb => new Date(nb.updated_at) > lastSyncDate);
+      memosToPush = allLocalMemos.filter(m => new Date(m.updated_at) > lastSyncDate);
     }
 
     // 2. 发起双向原子同步请求
@@ -98,9 +99,11 @@ export class SyncService {
       token: token,
       notebooks: notebooksToPush,
       notes: notesToPush,
+      memos: memosToPush,
       audio_records: [],
       deleted_note_ids: [],
-      deleted_notebook_ids: []
+      deleted_notebook_ids: [],
+      deleted_memo_ids: []
     };
 
     const res = await axios.post(`${cleanUrl}/api/sync/two-way`, payload, {

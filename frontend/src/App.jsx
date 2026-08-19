@@ -7,6 +7,9 @@ import AICopilotModal from './components/AICopilotModal';
 import MindMapModal from './components/MindMapModal';
 import SettingsModal from './components/SettingsModal';
 import SyncModal from './components/SyncModal';
+import GraphViewModal from './components/GraphViewModal';
+import MemoStreamView from './components/MemoStreamView';
+import ActivityHeatmap from './components/ActivityHeatmap';
 import ErrorBoundary from './components/ErrorBoundary';
 import AIConsultationView from './components/AIConsultationView';
 import EmbeddedWebAIView from './components/EmbeddedWebAIView';
@@ -14,18 +17,20 @@ import {
   getNotebooks, createNotebook, updateNotebook, deleteNotebook,
   getNotes, getNote, createNote, updateNote, deleteNote, restoreNote, emptyTrash,
   getAudioRecords, analyzeContent, lockNote, unlockNote, verifyNotePassword,
-  cloneNote, batchImportNotes
+  cloneNote, batchImportNotes, getMemos
 } from './api/client';
+import { localDb } from './services/localDb';
 
 export default function App() {
   // 核心数据状态
   const [notebooks, setNotebooks] = useState([]);
   const [notes, setNotes] = useState([]);
+  const [memos, setMemos] = useState([]);
   const [currentNote, setCurrentNote] = useState(null);
   const [audioRecords, setAudioRecords] = useState([]);
 
   // 视图与导航状态
-  const [currentView, setCurrentView] = useState('all'); // 'all', 'starred', 'trash', 'audio_studio', 'notebook'
+  const [currentView, setCurrentView] = useState('all'); // 'all', 'starred', 'trash', 'audio_studio', 'notebook', 'memos'
   const [currentNotebookId, setCurrentNotebookId] = useState(null);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [darkMode, setDarkMode] = useState(false);
@@ -41,12 +46,29 @@ export default function App() {
   const [mindMapContent, setMindMapContent] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isGraphModalOpen, setIsGraphModalOpen] = useState(false);
+  const [isHeatmapModalOpen, setIsHeatmapModalOpen] = useState(false);
 
   // 初始化加载
   useEffect(() => {
     fetchNotebooks();
     fetchAudioRecords();
+    fetchMemos();
   }, []);
+
+  const fetchMemos = async () => {
+    try {
+      let list;
+      try {
+        list = await getMemos();
+      } catch (e) {
+        list = await localDb.getMemos();
+      }
+      setMemos(list || []);
+    } catch (err) {
+      console.warn('Failed to fetch memos:', err);
+    }
+  };
 
   // 当视图、分类或搜索关键词变化时重新拉取笔记列表
   useEffect(() => {
@@ -396,12 +418,23 @@ export default function App() {
           trashNotesCount={trashCount}
           starredNotesCount={starredCount}
           audioRecordsCount={audioRecords.length}
+          memosCount={memos.length}
           onOpenSyncModal={() => setIsSyncModalOpen(true)}
+          onOpenGraphModal={() => setIsGraphModalOpen(true)}
+          onOpenHeatmapModal={() => setIsHeatmapModalOpen(true)}
           onBatchImport={handleBatchImport}
         />
 
-        {/* 2. 主区域：根据当前视图切换显示 笔记列表+编辑器 或 录音工坊 或 AI 视图 */}
-        {currentView === 'audio_studio' ? (
+        {/* 2. 主区域：根据当前视图切换显示 笔记列表+编辑器 或 闪念速记流 或 录音工坊 或 AI 视图 */}
+        {currentView === 'memos' ? (
+          <MemoStreamView
+            onNavigateToNote={async (noteId) => {
+              await fetchNotes();
+              setCurrentView('all');
+              handleSelectNote(noteId);
+            }}
+          />
+        ) : currentView === 'audio_studio' ? (
           <AudioStudio
             onNoteCreated={async (noteId) => {
               await fetchNotes();
@@ -456,7 +489,9 @@ export default function App() {
             {/* 右侧主工作区编辑器 */}
             <Editor
               note={currentNote}
+              allNotes={notes}
               notebooks={notebooks}
+              onSelectNote={handleSelectNote}
               onUpdateNote={handleUpdateNote}
               onOpenAIChat={() => setIsAIChatOpen(true)}
               onGenerateMindMap={handleOpenMindMap}
@@ -499,8 +534,31 @@ export default function App() {
           onSyncComplete={async () => {
             await fetchNotes();
             await fetchNotebooks();
+            await fetchMemos();
           }}
         />
+
+        {/* 7. 全局 2D 交互式知识关系图谱弹窗 */}
+        <GraphViewModal
+          isOpen={isGraphModalOpen}
+          onClose={() => setIsGraphModalOpen(false)}
+          onSelectNote={handleSelectNote}
+        />
+
+        {/* 8. 365 天创作打卡热力图浮层弹窗 */}
+        {isHeatmapModalOpen && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fadeIn"
+            onClick={() => setIsHeatmapModalOpen(false)}
+          >
+            <div 
+              className="w-full max-w-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ActivityHeatmap notes={notes} memos={memos} />
+            </div>
+          </div>
+        )}
       </div>
     </ErrorBoundary>
   );

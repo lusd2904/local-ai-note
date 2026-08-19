@@ -142,6 +142,65 @@ class AISettingOut(BaseModel):
         from_attributes = True
 
 
+# ----------------- 闪念速记 (Memo) -----------------
+class MemoBase(BaseModel):
+    content: str
+    images: Optional[List[str]] = []
+    tags: Optional[List[str]] = []
+    is_pinned: Optional[bool] = False
+    is_archived: Optional[bool] = False
+
+class MemoCreate(MemoBase):
+    pass
+
+class MemoUpdate(BaseModel):
+    content: Optional[str] = None
+    images: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
+    is_pinned: Optional[bool] = None
+    is_archived: Optional[bool] = None
+
+class MemoOut(MemoBase):
+    id: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class MemoConvertToNoteRequest(BaseModel):
+    memo_ids: List[str]
+    title: Optional[str] = "闪念灵感汇总"
+    notebook_id: Optional[str] = None
+
+# ----------------- 知识图谱与双向链接 (Graph & Backlinks) -----------------
+class GraphNode(BaseModel):
+    id: str
+    title: str
+    notebook_id: Optional[str] = None
+    notebook_name: Optional[str] = None
+    group: Optional[str] = "note"  # "note", "tag"
+    val: Optional[int] = 1         # 权重（连接数）
+
+class GraphLink(BaseModel):
+    source: str
+    target: str
+    label: Optional[str] = ""
+
+class GraphDataOut(BaseModel):
+    nodes: List[GraphNode] = []
+    links: List[GraphLink] = []
+
+class BacklinkItem(BaseModel):
+    note_id: str
+    note_title: str
+    snippet: str                  # 提及处的上下文摘要
+    updated_at: datetime
+
+class BacklinksOut(BaseModel):
+    note_id: str
+    backlinks: List[BacklinkItem] = []
+
 # ----------------- 局域网配对与多端双向同步 (Sync) -----------------
 class SyncInfoOut(BaseModel):
     server_ip: str
@@ -162,7 +221,6 @@ class SyncPairOut(BaseModel):
     server_name: str
     server_time: datetime
 
-
 class SyncPullRequest(BaseModel):
     last_sync_time: Optional[datetime] = None
     token: Optional[str] = None
@@ -170,17 +228,21 @@ class SyncPullRequest(BaseModel):
 class SyncPullOut(BaseModel):
     notebooks: List[Dict[str, Any]] = []
     notes: List[Dict[str, Any]] = []
+    memos: List[Dict[str, Any]] = []
     audio_records: List[Dict[str, Any]] = []
     deleted_note_ids: List[str] = []
     deleted_notebook_ids: List[str] = []
+    deleted_memo_ids: List[str] = []
     sync_timestamp: datetime
 
 class SyncPushRequest(BaseModel):
     notebooks: List[Dict[str, Any]] = []
     notes: List[Dict[str, Any]] = []
+    memos: List[Dict[str, Any]] = []
     audio_records: List[Dict[str, Any]] = []
     deleted_note_ids: List[str] = []
     deleted_notebook_ids: List[str] = []
+    deleted_memo_ids: List[str] = []
     token: Optional[str] = None
 
 class SyncPushOut(BaseModel):
@@ -195,19 +257,24 @@ class SyncTwoWayRequest(BaseModel):
     last_sync_time: Optional[datetime] = None
     notebooks: List[Dict[str, Any]] = []
     notes: List[Dict[str, Any]] = []
+    memos: List[Dict[str, Any]] = []
     audio_records: List[Dict[str, Any]] = []
     deleted_note_ids: List[str] = []
     deleted_notebook_ids: List[str] = []
+    deleted_memo_ids: List[str] = []
     token: Optional[str] = None
 
 class SyncTwoWayOut(BaseModel):
     status: str
     server_notebooks: List[Dict[str, Any]] = []
     server_notes: List[Dict[str, Any]] = []
+    server_memos: List[Dict[str, Any]] = []
     server_audio_records: List[Dict[str, Any]] = []
     server_deleted_note_ids: List[str] = []
     server_deleted_notebook_ids: List[str] = []
+    server_deleted_memo_ids: List[str] = []
     sync_timestamp: datetime
     stats: Dict[str, Any] = {}
+
 
 

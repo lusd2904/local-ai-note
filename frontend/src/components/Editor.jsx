@@ -14,9 +14,10 @@ import {
   Bold, Italic, Heading1, Heading2, Heading3, List, ListOrdered, 
   Code, Quote, Image as ImageIcon, Sparkles, Wand2, Tag, 
   Folder, Network, Bot, Download, Check, RefreshCw, X, FileText, Lock, Unlock, Eye, EyeOff, BookOpenCheck,
-  Table as TableIcon, Minus, Strikethrough, Underline as UnderlineIcon, Copy, Edit3, ChevronDown, CheckCheck
+  Table as TableIcon, Minus, Strikethrough, Underline as UnderlineIcon, Copy, Edit3, ChevronDown, CheckCheck,
+  Link2, BookOpen
 } from 'lucide-react';
-import { uploadImage, streamAIAnalyze } from '../api/client';
+import { uploadImage, streamAIAnalyze, getNoteBacklinks } from '../api/client';
 import LockModal from './LockModal';
 
 // 🌟 将 Markdown 格式转换为 Tiptap 能直接渲染为高清图片与富文本的 HTML
@@ -35,7 +36,9 @@ function markdownToRichHTML(md) {
   html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
   // 5. 将引用转换为 <blockquote>
   html = html.replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>');
-  // 6. 换行
+  // 6. 将 [[双向链接]] 转换为带图标与高亮背景的内链标签
+  html = html.replace(/\[\[([^\]]+)\]\]/g, '<span class="inline-flex items-center space-x-1 px-2 py-0.5 mx-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300 font-semibold border border-blue-200/80 dark:border-blue-800 text-xs shadow-xs select-none cursor-pointer hover:underline" data-internal-link="$1">🔗 $1</span>');
+  // 7. 换行
   html = html.replace(/\n\n/g, '</p><p>');
   html = html.replace(/\n/g, '<br/>');
   return `<p>${html}</p>`;
@@ -82,7 +85,9 @@ function EditorCore({
   onLockNote,
   onUnlockNote,
   onRelockNote,
-  onCloneNote
+  onCloneNote,
+  allNotes = [],
+  onSelectNote
 }) {
   const [title, setTitle] = useState(note?.title || '');
   const [notebookId, setNotebookId] = useState(note?.notebook_id || '');
@@ -90,6 +95,41 @@ function EditorCore({
   const [lockModalMode, setLockModalMode] = useState('lock');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   
+  // 🌟 反向引用与双向链接状态
+  const [backlinks, setBacklinks] = useState([]);
+  const [showBacklinks, setShowBacklinks] = useState(true);
+  const [isLinkPickerOpen, setIsLinkPickerOpen] = useState(false);
+  const [linkSearch, setLinkSearch] = useState('');
+
+  // 加载当前笔记的反向引用
+  useEffect(() => {
+    if (!note?.id) return;
+    loadBacklinks();
+  }, [note?.id]);
+
+  const loadBacklinks = async () => {
+    try {
+      const res = await getNoteBacklinks(note.id);
+      setBacklinks(res.backlinks || []);
+    } catch (e) {
+      // 离线环境从 allNotes 中本地搜索反向引用
+      const currentTitle = note?.title?.trim()?.toLowerCase();
+      if (!currentTitle) return;
+      const matched = [];
+      (allNotes || []).forEach(n => {
+        if (n.id !== note.id && n.content && n.content.toLowerCase().includes(`[[${currentTitle}]]`)) {
+          matched.push({
+            note_id: n.id,
+            note_title: n.title || '无标题笔记',
+            snippet: n.content.slice(0, 80),
+            updated_at: n.updated_at
+          });
+        }
+      });
+      setBacklinks(matched);
+    }
+  };
+
   const getInitialTags = () => {
     if (Array.isArray(note?.tags)) return note.tags;
     if (typeof note?.tags === 'string') {
@@ -846,6 +886,15 @@ function EditorCore({
             <ImageIcon className="w-3.5 h-3.5" />
           </button>
 
+          {/* 🔗 插入双向链接按钮 */}
+          <button
+            onClick={() => setIsLinkPickerOpen(true)}
+            className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-blue-500"
+            title="插入 [[双向链接]] 关联已有笔记"
+          >
+            <Link2 className="w-3.5 h-3.5" />
+          </button>
+
           {/* 表格工具 */}
           <div className="relative ml-1" ref={tableMenuRef}>
             <button
@@ -877,39 +926,40 @@ function EditorCore({
                 <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
                 <button
                   onClick={() => {
-                    runEditorChain(chain => chain.addRowAfter());
-                    setShowTableMenu(false);
-                  }}
-                  className="px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-                >
-                  ⬇️ 下方添加行
-                </button>
-                <button
-                  onClick={() => {
-                    runEditorChain(chain => chain.deleteRow());
-                    setShowTableMenu(false);
-                  }}
-                  className="px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-                >
-                  ➖ 删除当前行
-                </button>
-                <button
-                  onClick={() => {
                     runEditorChain(chain => chain.addColumnAfter());
                     setShowTableMenu(false);
                   }}
-                  className="px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                  className="px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 transition"
                 >
-                  ➡️ 右侧添加列
+                  右侧插入列
                 </button>
                 <button
                   onClick={() => {
                     runEditorChain(chain => chain.deleteColumn());
                     setShowTableMenu(false);
                   }}
-                  className="px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                  className="px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
                 >
-                  ➖ 删除当前列
+                  删除当前列
+                </button>
+                <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
+                <button
+                  onClick={() => {
+                    runEditorChain(chain => chain.addRowAfter());
+                    setShowTableMenu(false);
+                  }}
+                  className="px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 transition"
+                >
+                  下方插入行
+                </button>
+                <button
+                  onClick={() => {
+                    runEditorChain(chain => chain.deleteRow());
+                    setShowTableMenu(false);
+                  }}
+                  className="px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+                >
+                  删除当前行
                 </button>
                 <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
                 <button
@@ -917,7 +967,7 @@ function EditorCore({
                     runEditorChain(chain => chain.deleteTable());
                     setShowTableMenu(false);
                   }}
-                  className="px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+                  className="px-3 py-1.5 text-left text-xs text-red-600 font-bold hover:bg-red-50 dark:hover:bg-red-950/40 transition"
                 >
                   🗑️ 删除整个表格
                 </button>
@@ -930,11 +980,21 @@ function EditorCore({
       {/* 所见即所得编辑正文区域 */}
       <div 
         className="flex-1 overflow-y-auto cursor-text bg-white dark:bg-gray-900" 
-        onClick={() => {
+        onClick={(e) => {
+          // 点击内链标签直接跳转
+          const linkTarget = e.target.closest('[data-internal-link]');
+          if (linkTarget) {
+            const targetTitle = linkTarget.getAttribute('data-internal-link');
+            const matched = (allNotes || []).find(n => n.title.trim().toLowerCase() === targetTitle.trim().toLowerCase() || n.id === targetTitle);
+            if (matched && onSelectNote) {
+              onSelectNote(matched.id);
+              return;
+            }
+          }
           if (editor && !editor.isDestroyed) {
             try {
               editor.commands.focus();
-            } catch (e) {}
+            } catch (err) {}
           }
         }}
       >
@@ -951,11 +1011,112 @@ function EditorCore({
                 <button onClick={() => handleRunAIAction('correct')} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-red-500 flex items-center space-x-1 text-xs"><CheckCheck className="w-3.5 h-3.5" /><span className="hidden sm:inline">纠错</span></button>
               </BubbleMenu>
             )}
+
+            {/* 🔗 底部反向引用 (Backlinks) 折叠面板 */}
+            <div className="mx-8 my-8 pt-4 border-t border-gray-100 dark:border-gray-800">
+              <div 
+                className="p-4 rounded-2xl bg-gray-50/80 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800/80 space-y-3 cursor-default"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div 
+                  className="flex items-center justify-between cursor-pointer select-none"
+                  onClick={() => setShowBacklinks(!showBacklinks)}
+                >
+                  <div className="flex items-center space-x-2 text-xs font-bold text-gray-700 dark:text-gray-300">
+                    <Link2 className="w-4 h-4 text-blue-500" />
+                    <span>反向引用 (Backlinks)</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-mono">
+                      {backlinks.length}
+                    </span>
+                  </div>
+                  <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showBacklinks ? '' : '-rotate-90'}`} />
+                </div>
+
+                {showBacklinks && (
+                  backlinks.length === 0 ? (
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      暂无其他笔记引用此篇。在其他笔记中输入 <span className="font-mono text-blue-500">[[{note.title || '标题'}]]</span> 即可自动建立双向知识网！
+                    </p>
+                  ) : (
+                    <div className="space-y-2 pt-1">
+                      {backlinks.map(bl => (
+                        <div
+                          key={bl.note_id}
+                          onClick={() => onSelectNote && onSelectNote(bl.note_id)}
+                          className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700 hover:border-blue-500 hover:shadow-xs cursor-pointer transition text-xs space-y-1"
+                        >
+                          <div className="font-bold text-blue-600 dark:text-blue-400 flex items-center space-x-1.5">
+                            <BookOpen className="w-3.5 h-3.5" />
+                            <span>{bl.note_title}</span>
+                          </div>
+                          <p className="text-gray-500 dark:text-gray-400 line-clamp-2 text-[11px] leading-relaxed font-normal">
+                            {bl.snippet}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
           </>
         ) : (
           <div className="p-8 text-gray-400 text-xs animate-pulse">正在准备编辑器...</div>
         )}
       </div>
+
+      {/* 双向链接选择器弹窗 */}
+      {isLinkPickerOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fadeIn"
+          onClick={() => setIsLinkPickerOpen(false)}
+        >
+          <div 
+            className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col p-4 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center space-x-1.5 text-xs font-bold text-gray-900 dark:text-white">
+                <Link2 className="w-4 h-4 text-blue-500" />
+                <span>插入双向链接 (Internal Link)</span>
+              </div>
+              <button onClick={() => setIsLinkPickerOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="搜索要链接的目标笔记标题..."
+              value={linkSearch}
+              onChange={(e) => setLinkSearch(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:border-blue-500"
+              autoFocus
+            />
+
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {(allNotes || [])
+                .filter(n => n.id !== note.id && (!linkSearch || n.title.toLowerCase().includes(linkSearch.toLowerCase())))
+                .map(n => (
+                  <button
+                    key={n.id}
+                    onClick={() => {
+                      if (editor && !editor.isDestroyed) {
+                        editor.chain().focus().insertContent(` [[${n.title || '无标题笔记'}]] `).run();
+                      }
+                      setIsLinkPickerOpen(false);
+                      setLinkSearch('');
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs hover:bg-blue-50 dark:hover:bg-gray-800 hover:text-blue-600 transition flex items-center space-x-2 text-gray-700 dark:text-gray-200"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span className="truncate font-medium">{n.title || '无标题笔记'}</span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <LockModal
         isOpen={isLockModalOpen}

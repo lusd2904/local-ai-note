@@ -1,7 +1,8 @@
 import json
 import secrets
 import hashlib
-from typing import List, Optional
+import re
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, desc
@@ -9,7 +10,8 @@ from ..database import get_db
 from ..models import Note, Notebook, AudioRecord
 from ..schemas import (
     NoteCreate, NoteUpdate, NoteOut,
-    NoteLockRequest, NoteUnlockRequest, NoteVerifyPasswordRequest
+    NoteLockRequest, NoteUnlockRequest, NoteVerifyPasswordRequest,
+    GraphDataOut, GraphNode, GraphLink, BacklinksOut, BacklinkItem
 )
 
 # PBKDF2 迭代次数（OWASP 2023 推荐：PBKDF2-HMAC-SHA256 至少 600,000 次）
@@ -540,3 +542,141 @@ async def batch_import(files: List[UploadFile] = File(...), db: Session = Depend
             "audio_count": 0
         })
     return created_notes
+
+
+@router.get("/graph/data", response_model=GraphDataOut)
+def get_knowledge_graph(db: Session = Depends(get_db)):
+    """获取全局知识图谱节点与连线数据 (解析 [[双向链接]] 与 #标签 关联)"""
+    notes = db.query(Note).filter(Note.is_trashed == False).all()
+    notebooks = {nb.id: nb.name for nb in db.query(Notebook).all()}
+    
+    # 建立标题 -> Note ID 和 ID -> Note 的映射
+    title_to_note = {n.title.strip().lower(): n for n in notes if n.title}
+    id_to_note = {n.id: n for n in notes}
+
+    nodes_dict: Dict[str, GraphNode] = {}
+    links: List[GraphLink] = []
+    link_count: Dict[str, int] = {}
+
+    # 1. 注册所有笔记节点
+    for n in notes:
+        nb_name = notebooks.get(n.notebook_id, "未分类")
+        nodes_dict[n.id] = GraphNode(
+            id=n.id,
+            title=n.title or "无标题笔记",
+            notebook_id=n.notebook_id,
+            notebook_name=nb_name,
+            group="note",
+            val=1
+        )
+        link_count[n.id] = 0
+
+    # 2. 解析笔记正文中的 [[双链]] 引用
+    link_pattern = re.compile(r'\[\[([^\]]+)\]\]')
+    tag_nodes: Dict[str, GraphNode] = {}
+
+    for n in notes:
+        content = n.content or ""
+        # 匹配 [[目标笔记]]
+        matches = link_pattern.findall(content)
+        for target_text in matches:
+            target_clean = target_text.strip()
+            target_key = target_clean.lower()
+            
+            # 匹配目标是否为已有笔记标题或 ID
+            target_note = title_to_note.get(target_key) or id_to_note.get(target_clean)
+            if target_note and target_note.id != n.id:
+                links.append(GraphLink(
+                    source=n.id,
+                    target=target_note.id,
+                    label="link"
+                ))
+                link_count[n.id] = link_count.get(n.id, 0) + 1
+                link_count[target_note.id] = link_count.get(target_note.id, 0) + 1
+
+        # 关联标签节点
+        try:
+            tags = json.loads(n.tags) if n.tags else []
+        except Exception:
+            tags = []
+
+        for tag in tags:
+            tag_id = f"tag_{tag}"
+            if tag_id not in tag_nodes:
+                tag_nodes[tag_id] = GraphNode(
+                    id=tag_id,
+                    title=f"#{tag}",
+                    notebook_id=None,
+                    notebook_name="标签",
+                    group="tag",
+                    val=2
+                )
+                link_count[tag_id] = 0
+
+            links.append(GraphLink(
+                source=n.id,
+                target=tag_id,
+                label="tag"
+            ))
+            link_count[n.id] = link_count.get(n.id, 0) + 1
+            link_count[tag_id] = link_count.get(tag_id, 0) + 1
+
+    # 合并标签节点并更新节点权重 val
+    for tag_id, tag_node in tag_nodes.items():
+        nodes_dict[tag_id] = tag_node
+
+    for node_id, node in nodes_dict.items():
+        node.val = max(1, link_count.get(node_id, 1))
+
+    return GraphDataOut(
+        nodes=list(nodes_dict.values()),
+        links=links
+    )
+
+
+@router.get("/{note_id}/backlinks", response_model=BacklinksOut)
+def get_note_backlinks(note_id: str, db: Session = Depends(get_db)):
+    """获取引用了当前笔记的所有反向引用 (Backlinks) 列表及上下文摘要"""
+    current_note = db.query(Note).filter(Note.id == note_id).first()
+    if not current_note:
+        raise HTTPException(status_code=404, detail="笔记不存在")
+
+    current_title = current_note.title.strip() if current_note.title else ""
+    all_notes = db.query(Note).filter(Note.id != note_id, Note.is_trashed == False).all()
+
+    backlinks: List[BacklinkItem] = []
+    # 匹配 [[当前笔记标题]] 或 [[当前笔记ID]]
+    patterns = [
+        re.compile(re.escape(f"[[{current_title}]]"), re.IGNORECASE) if current_title else None,
+        re.compile(re.escape(f"[[{note_id}]]"))
+    ]
+    patterns = [p for p in patterns if p is not None]
+
+    for n in all_notes:
+        content = n.content or ""
+        matched = False
+        snippet = ""
+        for p in patterns:
+            m = p.search(content)
+            if m:
+                matched = True
+                # 提取前后 50 个字符的上下文摘要
+                start = max(0, m.start() - 30)
+                end = min(len(content), m.end() + 30)
+                raw_snippet = content[start:end].replace('\n', ' ')
+                snippet = f"...{raw_snippet}..." if start > 0 or end < len(content) else raw_snippet
+                break
+
+        if matched:
+            backlinks.append(BacklinkItem(
+                note_id=n.id,
+                note_title=n.title or "无标题笔记",
+                snippet=snippet,
+                updated_at=n.updated_at
+            ))
+
+    return BacklinksOut(
+        note_id=note_id,
+        backlinks=backlinks
+    )
+

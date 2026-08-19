@@ -9,7 +9,7 @@ from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Note, Notebook, AudioRecord, AISetting
+from ..models import Note, Notebook, AudioRecord, AISetting, Memo
 from ..schemas import (
     SyncInfoOut, SyncPairRequest, SyncPairOut,
     SyncPullRequest, SyncPullOut,
@@ -137,6 +137,28 @@ def _serialize_audio(a) -> dict:
     }
 
 
+def _serialize_memo(m) -> dict:
+    try:
+        tags = json.loads(m.tags) if m.tags else []
+    except Exception:
+        tags = []
+    try:
+        images = json.loads(m.images) if m.images else []
+    except Exception:
+        images = []
+    return {
+        "id": m.id,
+        "content": m.content,
+        "images": images,
+        "tags": tags,
+        "is_pinned": bool(m.is_pinned),
+        "is_archived": bool(m.is_archived),
+        "created_at": m.created_at.isoformat() if m.created_at else None,
+        "updated_at": m.updated_at.isoformat() if m.updated_at else None
+    }
+
+
+
 # ─── C1 修复: /info 不再暴露 Token ───
 
 @router.get("/info", response_model=SyncInfoOut)
@@ -245,12 +267,19 @@ def pull_changes(data: SyncPullRequest, db: Session = Depends(get_db)):
         audio_query = audio_query.filter(AudioRecord.updated_at > last_sync)
     audios = audio_query.all()
 
+    memo_query = db.query(Memo)
+    if last_sync:
+        memo_query = memo_query.filter(Memo.updated_at > last_sync)
+    memos = memo_query.all()
+
     return {
         "notebooks": [_serialize_notebook(nb) for nb in notebooks],
         "notes": [_serialize_note(n) for n in notes],  # C3: password_hash 已过滤
+        "memos": [_serialize_memo(m) for m in memos],
         "audio_records": [_serialize_audio(a) for a in audios],
         "deleted_note_ids": [],
         "deleted_notebook_ids": [],
+        "deleted_memo_ids": [],
         "sync_timestamp": datetime.utcnow()
     }
 
@@ -261,7 +290,7 @@ def pull_changes(data: SyncPullRequest, db: Session = Depends(get_db)):
 def sync_two_way(data: SyncTwoWayRequest, db: Session = Depends(get_db)):
     """
     一键原子双向增量同步：
-    1. 接收 iOS 客户端本地新增与修改的数据，根据 updated_at 智能合并写入 Mac SQLite
+    1. 接收 iOS 客户端本地新增与修改的数据（笔记、笔记本、闪念速记），根据 updated_at 智能合并写入 Mac SQLite
     2. 查询 Mac 服务端更新的数据，一并返回给 iOS 客户端更新本地 IndexedDB
     """
     verify_sync_token(data.token)
@@ -359,7 +388,39 @@ def sync_two_way(data: SyncTwoWayRequest, db: Session = Depends(get_db)):
             db.add(new_note)
             inserted_notes += 1
 
-    # 3. 处理客户端提交的删除 ID
+    # 3. 批量合并客户端推上来的闪念速记 (Memos)
+    for memo_data in data.memos:
+        memo_id = memo_data.get("id")
+        if not memo_id:
+            continue
+        existing_memo = db.query(Memo).filter(Memo.id == memo_id).first()
+        client_updated = parse_iso_datetime(memo_data.get("updated_at")) or sync_now
+
+        tags_str = json.dumps(memo_data.get("tags") or [], ensure_ascii=False) if isinstance(memo_data.get("tags"), list) else memo_data.get("tags", "[]")
+        images_str = json.dumps(memo_data.get("images") or [], ensure_ascii=False) if isinstance(memo_data.get("images"), list) else memo_data.get("images", "[]")
+
+        if existing_memo:
+            if not existing_memo.updated_at or client_updated > existing_memo.updated_at:
+                existing_memo.content = memo_data.get("content", existing_memo.content)
+                existing_memo.images = images_str
+                existing_memo.tags = tags_str
+                existing_memo.is_pinned = bool(memo_data.get("is_pinned", existing_memo.is_pinned))
+                existing_memo.is_archived = bool(memo_data.get("is_archived", existing_memo.is_archived))
+                existing_memo.updated_at = client_updated
+        else:
+            new_memo = Memo(
+                id=memo_id,
+                content=memo_data.get("content", ""),
+                images=images_str,
+                tags=tags_str,
+                is_pinned=bool(memo_data.get("is_pinned", False)),
+                is_archived=bool(memo_data.get("is_archived", False)),
+                created_at=parse_iso_datetime(memo_data.get("created_at")) or sync_now,
+                updated_at=client_updated
+            )
+            db.add(new_memo)
+
+    # 4. 处理客户端提交的删除 ID
     for del_id in data.deleted_note_ids:
         del_note = db.query(Note).filter(Note.id == del_id).first()
         if del_note:
@@ -371,9 +432,14 @@ def sync_two_way(data: SyncTwoWayRequest, db: Session = Depends(get_db)):
         if del_nb:
             db.delete(del_nb)
 
+    for del_memo_id in data.deleted_memo_ids:
+        del_memo = db.query(Memo).filter(Memo.id == del_memo_id).first()
+        if del_memo:
+            db.delete(del_memo)
+
     db.commit()
 
-    # 4. 查询服务端需要回传给客户端的增量变动
+    # 5. 查询服务端需要回传给客户端的增量变动
     server_nb_query = db.query(Notebook)
     if last_sync:
         server_nb_query = server_nb_query.filter(Notebook.updated_at > last_sync)
@@ -384,6 +450,11 @@ def sync_two_way(data: SyncTwoWayRequest, db: Session = Depends(get_db)):
         server_notes_query = server_notes_query.filter(Note.updated_at > last_sync)
     server_notes = server_notes_query.all()
 
+    server_memos_query = db.query(Memo)
+    if last_sync:
+        server_memos_query = server_memos_query.filter(Memo.updated_at > last_sync)
+    server_memos = server_memos_query.all()
+
     server_audios_query = db.query(AudioRecord)
     if last_sync:
         server_audios_query = server_audios_query.filter(AudioRecord.updated_at > last_sync)
@@ -393,9 +464,11 @@ def sync_two_way(data: SyncTwoWayRequest, db: Session = Depends(get_db)):
         "status": "success",
         "server_notebooks": [_serialize_notebook(nb) for nb in server_notebooks],
         "server_notes": [_serialize_note(n) for n in server_notes],  # C3: password_hash 已过滤
+        "server_memos": [_serialize_memo(m) for m in server_memos],
         "server_audio_records": [_serialize_audio(a) for a in server_audios],
         "server_deleted_note_ids": [],
         "server_deleted_notebook_ids": [],
+        "server_deleted_memo_ids": [],
         "sync_timestamp": sync_now,
         "stats": {
             "pushed_notes_inserted": inserted_notes,
@@ -403,6 +476,7 @@ def sync_two_way(data: SyncTwoWayRequest, db: Session = Depends(get_db)):
             "pushed_notebooks_inserted": inserted_notebooks,
             "pushed_notebooks_updated": updated_notebooks,
             "pulled_notes_count": len(server_notes),
-            "pulled_notebooks_count": len(server_notebooks)
+            "pulled_notebooks_count": len(server_notebooks),
+            "pulled_memos_count": len(server_memos)
         }
     }

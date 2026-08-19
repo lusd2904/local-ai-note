@@ -3,7 +3,7 @@ import {
   BookOpen, Folder, FolderPlus, Star, Trash2, Mic, 
   Settings, Moon, Sun, ChevronRight, ChevronDown, Plus, 
   Edit2, Check, X, CornerDownRight, Bot, Sparkles, ExternalLink, Globe,
-  ArrowRightLeft
+  ArrowRightLeft, Zap, Share2, Flame
 } from 'lucide-react';
 
 // 将扁平笔记本数组转换为树形结构
@@ -214,7 +214,10 @@ export default function Sidebar({
   trashNotesCount,
   starredNotesCount,
   audioRecordsCount,
+  memosCount = 0,
   onOpenSyncModal,
+  onOpenGraphModal,
+  onOpenHeatmapModal,
   onBatchImport
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -270,6 +273,42 @@ export default function Sidebar({
           </div>
           <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 font-mono">
             {totalNotesCount}
+          </span>
+        </button>
+
+        {/* ⚡️ 闪念速记流 (Memo Stream) */}
+        <button
+          onClick={() => onSelectView('memos')}
+          style={{ WebkitAppRegion: 'no-drag' }}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+            currentView === 'memos'
+              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold'
+              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
+          }`}
+        >
+          <div className="flex items-center space-x-2.5">
+            <Zap className="w-4 h-4 text-amber-500" />
+            <span>闪念速记流</span>
+          </div>
+          {memosCount > 0 && (
+            <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-mono">
+              {memosCount}
+            </span>
+          )}
+        </button>
+
+        {/* 🕸️ 知识关系图谱 */}
+        <button
+          onClick={onOpenGraphModal}
+          style={{ WebkitAppRegion: 'no-drag' }}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all text-gray-700 dark:text-gray-300 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
+        >
+          <div className="flex items-center space-x-2.5">
+            <Share2 className="w-4 h-4 text-indigo-500" />
+            <span>知识关系图谱</span>
+          </div>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 font-medium">
+            2D
           </span>
         </button>
 
@@ -558,6 +597,16 @@ export default function Sidebar({
         </button>
 
         <div className="flex items-center space-x-1">
+          {/* 创作打卡热力图快捷入口 */}
+          <button
+            onClick={onOpenHeatmapModal}
+            style={{ WebkitAppRegion: 'no-drag' }}
+            className="p-1.5 text-gray-500 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-md transition"
+            title="365 天知识产出打卡热力图"
+          >
+            <Flame className="w-4 h-4 text-emerald-500" />
+          </button>
+
           {/* 多端同步快捷入口 */}
           <button
             onClick={onOpenSyncModal}

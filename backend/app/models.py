@@ -84,3 +84,17 @@ class AISetting(Base):
     temperature = Column(Float, default=0.7)
     custom_prompts = Column(Text, default="{}")
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class Memo(Base):
+    """闪念速记模型 (轻量碎片灵感流，类似 flomo / Memos)"""
+    __tablename__ = "memos"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    content = Column(Text, nullable=False, default="")
+    images = Column(Text, default="[]")       # JSON array: 图片 URL 列表
+    tags = Column(Text, default="[]")         # JSON array: 标签列表
+    is_pinned = Column(Boolean, default=False)# 是否置顶
+    is_archived = Column(Boolean, default=False) # 是否已归档/转入笔记
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
