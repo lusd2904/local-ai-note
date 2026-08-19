@@ -67,6 +67,12 @@ export default function App() {
         window.webkit.messageHandlers.nativeWebAI.postMessage({ action: 'show', target: 'doubao' });
       } else if (currentView === 'ai_deepseek') {
         window.webkit.messageHandlers.nativeWebAI.postMessage({ action: 'show', target: 'deepseek' });
+      } else if (currentView === 'ai_kimi') {
+        window.webkit.messageHandlers.nativeWebAI.postMessage({ action: 'show', target: 'kimi' });
+      } else if (currentView === 'ai_grok') {
+        window.webkit.messageHandlers.nativeWebAI.postMessage({ action: 'show', target: 'grok' });
+      } else if (currentView === 'ai_gemini') {
+        window.webkit.messageHandlers.nativeWebAI.postMessage({ action: 'show', target: 'gemini' });
       } else {
         window.webkit.messageHandlers.nativeWebAI.postMessage({ action: 'hide' });
       }
@@ -443,9 +449,15 @@ export default function App() {
             }
           }} />
         ) : currentView === 'ai_doubao' ? (
-          <EmbeddedWebAIView key="doubao" title="豆包 AI 网页版" url="https://www.doubao.com/chat/" icon="🥣" />
+          <EmbeddedWebAIView key="doubao" title="豆包" url="https://www.doubao.com/chat/" icon="🥣" />
         ) : currentView === 'ai_deepseek' ? (
-          <EmbeddedWebAIView key="deepseek" title="DeepSeek 智能助手" url="https://chat.deepseek.com/" icon="🐋" />
+          <EmbeddedWebAIView key="deepseek" title="DeepSeek" url="https://chat.deepseek.com/" icon="🐋" />
+        ) : currentView === 'ai_kimi' ? (
+          <EmbeddedWebAIView key="kimi" title="Kimi" url="https://kimi.moonshot.cn/" icon="🌙" />
+        ) : currentView === 'ai_grok' ? (
+          <EmbeddedWebAIView key="grok" title="Grok" url="https://grok.com/" icon="⚡️" />
+        ) : currentView === 'ai_gemini' ? (
+          <EmbeddedWebAIView key="gemini" title="Gemini" url="https://gemini.google.com/" icon="✨" />
         ) : (
           <>
             {/* 中间笔记卡片列表 */}

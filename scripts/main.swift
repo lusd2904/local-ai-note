@@ -26,8 +26,7 @@ class DraggableWindow: NSWindow {
 class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     var window: DraggableWindow!
     var webView: WKWebView!
-    var doubaoWebView: WKWebView!
-    var deepseekWebView: WKWebView!
+    var embeddedWebViews: [String: WKWebView] = [:]
     var authPopupWindow: NSWindow?
     let targetURL = URL(string: "http://localhost:3000")!
 
@@ -103,42 +102,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
 
         let sharedStore = WKWebsiteDataStore.default()
 
-        // 🌟 1. 豆包专属原生 WebView (独立 Top-Level 顶级帧，100% 解决第三方 Cookie 拦截)
-        let doubaoConfig = WKWebViewConfiguration()
-        doubaoConfig.websiteDataStore = sharedStore
-        doubaoConfig.preferences.setValue(true, forKey: "developerExtrasEnabled")
-        doubaoConfig.mediaTypesRequiringUserActionForPlayback = []
-        doubaoConfig.allowsAirPlayForMediaPlayback = true
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = sharedStore
+        config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        config.mediaTypesRequiringUserActionForPlayback = []
+        config.allowsAirPlayForMediaPlayback = true
 
-        doubaoWebView = WKWebView(frame: webViewRect, configuration: doubaoConfig)
-        doubaoWebView.navigationDelegate = self
-        doubaoWebView.uiDelegate = self
-        doubaoWebView.autoresizingMask = [.width, .height]
-        doubaoWebView.isHidden = true
-        doubaoWebView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"
-        window.contentView?.addSubview(doubaoWebView)
+        let sites: [(String, String)] = [
+            ("doubao", "https://www.doubao.com/chat/"),
+            ("deepseek", "https://chat.deepseek.com/"),
+            ("kimi", "https://kimi.moonshot.cn/"),
+            ("grok", "https://grok.com/"),
+            ("gemini", "https://gemini.google.com/")
+        ]
 
-        if let doubaoURL = URL(string: "https://www.doubao.com/chat/") {
-            doubaoWebView.load(URLRequest(url: doubaoURL))
-        }
-
-        // 🌟 2. DeepSeek 专属原生 WebView (独立顶级帧，完全绕过 Cloudflare 与 X-Frame 限制)
-        let deepseekConfig = WKWebViewConfiguration()
-        deepseekConfig.websiteDataStore = sharedStore
-        deepseekConfig.preferences.setValue(true, forKey: "developerExtrasEnabled")
-        deepseekConfig.mediaTypesRequiringUserActionForPlayback = []
-        deepseekConfig.allowsAirPlayForMediaPlayback = true
-
-        deepseekWebView = WKWebView(frame: webViewRect, configuration: deepseekConfig)
-        deepseekWebView.navigationDelegate = self
-        deepseekWebView.uiDelegate = self
-        deepseekWebView.autoresizingMask = [.width, .height]
-        deepseekWebView.isHidden = true
-        deepseekWebView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"
-        window.contentView?.addSubview(deepseekWebView)
-
-        if let deepseekURL = URL(string: "https://chat.deepseek.com/") {
-            deepseekWebView.load(URLRequest(url: deepseekURL))
+        for (target, urlStr) in sites {
+            let wk = WKWebView(frame: webViewRect, configuration: config)
+            wk.navigationDelegate = self
+            wk.uiDelegate = self
+            wk.autoresizingMask = [.width, .height]
+            wk.isHidden = true
+            wk.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"
+            window.contentView?.addSubview(wk)
+            
+            if let url = URL(string: urlStr) {
+                wk.load(URLRequest(url: url))
+            }
+            
+            embeddedWebViews[target] = wk
         }
     }
 
@@ -151,23 +142,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 if action == "show" {
-                    if target == "doubao" {
-                        self.doubaoWebView?.isHidden = false
-                        self.deepseekWebView?.isHidden = true
-                    } else if target == "deepseek" {
-                        self.deepseekWebView?.isHidden = false
-                        self.doubaoWebView?.isHidden = true
+                    for (key, wk) in self.embeddedWebViews {
+                        wk.isHidden = (key != target)
                     }
                 } else if action == "refresh" {
-                    if target == "doubao" {
-                        self.doubaoWebView?.reload()
-                    } else if target == "deepseek" {
-                        self.deepseekWebView?.reload()
-                    }
+                    self.embeddedWebViews[target]?.reload()
                 } else {
-                    // hide
-                    self.doubaoWebView?.isHidden = true
-                    self.deepseekWebView?.isHidden = true
+                    for wk in self.embeddedWebViews.values {
+                        wk.isHidden = true
+                    }
                 }
             }
         }

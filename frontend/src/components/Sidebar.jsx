@@ -221,6 +221,7 @@ export default function Sidebar({
   const [modalParentId, setModalParentId] = useState('');
   const [modalName, setModalName] = useState('');
   const [notebooksExpanded, setNotebooksExpanded] = useState(true);
+  const [aiSectionExpanded, setAiSectionExpanded] = useState(true);
 
   const notebookTree = buildTree(notebooks || []);
 
@@ -369,51 +370,103 @@ export default function Sidebar({
         {/* 🤖 AI 咨询与智库分组 */}
         <div className="pt-4 pb-1">
           <div className="flex items-center justify-between px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-            <span>🤖 AI 咨询与智库</span>
+            <div 
+              className="flex items-center space-x-1 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300"
+              onClick={() => setAiSectionExpanded(!aiSectionExpanded)}
+            >
+              {aiSectionExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              <span>🤖 AI 咨询与智库</span>
+            </div>
           </div>
         </div>
-        <button
-          onClick={() => onSelectView('ai_consultation')}
-          style={{ WebkitAppRegion: 'no-drag' }}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-            currentView === 'ai_consultation'
-              ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 font-semibold'
-              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
-          }`}
-        >
-          <div className="flex items-center space-x-2.5">
-            <Bot className="w-4 h-4 text-blue-500" />
-            <span>智能咨询</span>
+        {aiSectionExpanded && (
+          <div className="space-y-1">
+            <button
+              onClick={() => onSelectView('ai_consultation')}
+              style={{ WebkitAppRegion: 'no-drag' }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                currentView === 'ai_consultation'
+                  ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 font-semibold'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <Bot className="w-4 h-4 text-blue-500" />
+                <span>智能咨询</span>
+              </div>
+            </button>
+            <button
+              onClick={() => onSelectView('ai_doubao')}
+              style={{ WebkitAppRegion: 'no-drag' }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                currentView === 'ai_doubao'
+                  ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-semibold'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <span className="w-4 h-4 text-indigo-500 flex items-center justify-center text-sm">🥣</span>
+                <span>豆包</span>
+              </div>
+            </button>
+            <button
+              onClick={() => onSelectView('ai_deepseek')}
+              style={{ WebkitAppRegion: 'no-drag' }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                currentView === 'ai_deepseek'
+                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-semibold'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <span className="w-4 h-4 text-teal-500 flex items-center justify-center text-sm">🐋</span>
+                <span>DeepSeek</span>
+              </div>
+            </button>
+            <button
+              onClick={() => onSelectView('ai_kimi')}
+              style={{ WebkitAppRegion: 'no-drag' }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                currentView === 'ai_kimi'
+                  ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400 font-semibold'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <span className="w-4 h-4 flex items-center justify-center text-sm">🌙</span>
+                <span>Kimi</span>
+              </div>
+            </button>
+            <button
+              onClick={() => onSelectView('ai_grok')}
+              style={{ WebkitAppRegion: 'no-drag' }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                currentView === 'ai_grok'
+                  ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 font-semibold'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <span className="w-4 h-4 flex items-center justify-center text-sm">⚡️</span>
+                <span>Grok</span>
+              </div>
+            </button>
+            <button
+              onClick={() => onSelectView('ai_gemini')}
+              style={{ WebkitAppRegion: 'no-drag' }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                currentView === 'ai_gemini'
+                  ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 font-semibold'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <span className="w-4 h-4 flex items-center justify-center text-sm">✨</span>
+                <span>Gemini</span>
+              </div>
+            </button>
           </div>
-        </button>
-        <button
-          onClick={() => onSelectView('ai_doubao')}
-          style={{ WebkitAppRegion: 'no-drag' }}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-            currentView === 'ai_doubao'
-              ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-semibold'
-              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
-          }`}
-        >
-          <div className="flex items-center space-x-2.5">
-            <span className="w-4 h-4 text-indigo-500 flex items-center justify-center text-sm">🥣</span>
-            <span>豆包 网页版</span>
-          </div>
-        </button>
-        <button
-          onClick={() => onSelectView('ai_deepseek')}
-          style={{ WebkitAppRegion: 'no-drag' }}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-            currentView === 'ai_deepseek'
-              ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-semibold'
-              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
-          }`}
-        >
-          <div className="flex items-center space-x-2.5">
-            <span className="w-4 h-4 text-teal-500 flex items-center justify-center text-sm">🐋</span>
-            <span>DeepSeek 网页版</span>
-          </div>
-        </button>
+        )}
 
         {/* 笔记本分类标题栏 */}
         <div className="pt-4 pb-1">
