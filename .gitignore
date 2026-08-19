@@ -1,0 +1,67 @@
+# ==============================================================================
+# 隐私数据与本地持久化文件 (严禁上传)
+# ==============================================================================
+.env
+.env.local
+.env.*.local
+*.env
+data/
+backups/
+*.db
+*.sqlite
+*.sqlite3
+uploads/
+*.log
+
+# macOS 系统缓存
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Node.js / 前端构建产物
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Python / 后端编译产物
+__pycache__/
+backend/**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 原生 macOS 客户端编译二进制文件
+Note.app/
+LocalNote.app/
+*.app

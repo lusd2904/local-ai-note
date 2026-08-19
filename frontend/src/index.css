@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* macOS 原生细滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Markdown 内容样式增强 */
+.markdown-body {
+  @apply text-gray-800 dark:text-gray-200 leading-relaxed text-base;
+}
+
+.markdown-body h1 {
+  @apply text-2xl font-bold mt-6 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700;
+}
+
+.markdown-body h2 {
+  @apply text-xl font-bold mt-5 mb-3 pb-1 border-b border-gray-100 dark:border-gray-800;
+}
+
+.markdown-body h3 {
+  @apply text-lg font-semibold mt-4 mb-2;
+}
+
+.markdown-body p {
+  @apply mb-4 leading-7;
+}
+
+.markdown-body ul {
+  @apply list-disc list-inside mb-4 pl-2 space-y-1;
+}
+
+.markdown-body ol {
+  @apply list-decimal list-inside mb-4 pl-2 space-y-1;
+}
+
+.markdown-body blockquote {
+  @apply pl-4 border-l-4 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 py-2 my-4 rounded-r text-gray-700 dark:text-gray-300 italic;
+}
+
+.markdown-body code:not(pre code) {
+  @apply bg-gray-100 dark:bg-gray-800 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded text-sm font-mono;
+}
+
+.markdown-body pre {
+  @apply bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto my-4 text-sm font-mono shadow-inner;
+}
+
+.markdown-body table {
+  @apply w-full border-collapse my-4 border border-gray-200 dark:border-gray-700;
+}
+
+.markdown-body th, .markdown-body td {
+  @apply border border-gray-200 dark:border-gray-700 px-4 py-2 text-left;
+}
+
+.markdown-body th {
+  @apply bg-gray-50 dark:bg-gray-800 font-semibold;
+}
+
+.markdown-body img {
+  @apply max-w-full rounded-lg shadow-md my-4 border border-gray-200 dark:border-gray-700;
+}
+
+.markdown-body input[type="checkbox"] {
+  @apply mr-2 accent-blue-600 rounded;
+}

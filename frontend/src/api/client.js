@@ -1,0 +1,156 @@
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: '/api',
+  timeout: 60000,
+});
+
+// 笔记本
+export const getNotebooks = () => api.get('/notebooks').then(res => res.data);
+export const createNotebook = (data) => api.post('/notebooks', data).then(res => res.data);
+export const updateNotebook = (id, data) => api.put(`/notebooks/${id}`, data).then(res => res.data);
+export const deleteNotebook = (id) => api.delete(`/notebooks/${id}`).then(res => res.data);
+
+// 笔记
+export const getNotes = (params = {}) => api.get('/notes', { params }).then(res => res.data);
+export const getNote = (id) => api.get(`/notes/${id}`).then(res => res.data);
+export const createNote = (data) => api.post('/notes', data).then(res => res.data);
+export const updateNote = (id, data) => api.put(`/notes/${id}`, data).then(res => res.data);
+export const deleteNote = (id, permanent = false) => api.delete(`/notes/${id}`, { params: { permanent } }).then(res => res.data);
+export const restoreNote = (id) => api.post(`/notes/${id}/restore`).then(res => res.data);
+export const emptyTrash = () => api.delete('/notes/trash/empty').then(res => res.data);
+
+// 录音与音频工坊
+export const getAudioRecords = (noteId = null) => api.get('/audio', { params: { note_id: noteId } }).then(res => res.data);
+export const getAudioRecord = (id) => api.get(`/audio/${id}`).then(res => res.data);
+export const uploadAudio = (formData) => api.post('/audio/upload', formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+}).then(res => res.data);
+export const processAudio = (id) => api.post(`/audio/${id}/process`).then(res => res.data);
+export const convertAudioToNote = (id, notebookId = null) => api.post(`/audio/${id}/convert-to-note`, null, {
+  params: { notebook_id: notebookId }
+}).then(res => res.data);
+export const deleteAudioRecord = (id) => api.delete(`/audio/${id}`).then(res => res.data);
+
+// AI 分析与设置
+export const analyzeContent = (data) => api.post('/ai/analyze', data).then(res => res.data);
+export const chatWithNote = (data) => api.post('/ai/chat', data).then(res => res.data);
+export const getAISettings = () => api.get('/ai/settings').then(res => res.data);
+export const updateAISettings = (data) => api.post('/ai/settings', data).then(res => res.data);
+export const testAIConnection = () => api.post('/ai/test-connection').then(res => res.data);
+
+// 🌟 流式 AI 快捷分析算子 (SSE)
+export const streamAIAnalyze = async ({ content, action, target_lang }, onChunk, onComplete, onError) => {
+  try {
+    const response = await fetch('/api/ai/analyze/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, action, target_lang })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.error) {
+              if (onError) onError(new Error(data.error));
+              return;
+            }
+            if (data.chunk && onChunk) {
+              onChunk(data.chunk);
+            }
+            if (data.done) {
+              if (onComplete) onComplete();
+              return;
+            }
+          } catch (e) {}
+        }
+      }
+    }
+    if (onComplete) onComplete();
+  } catch (err) {
+    if (onError) onError(err);
+  }
+};
+
+// 🌟 流式 AI Copilot 问答 (SSE)
+export const streamAIChat = async ({ messages, note_title, note_content, audio_transcript }, onChunk, onComplete, onError) => {
+  try {
+    const response = await fetch('/api/ai/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, note_title, note_content, audio_transcript })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.error) {
+              if (onError) onError(new Error(data.error));
+              return;
+            }
+            if (data.chunk && onChunk) {
+              onChunk(data.chunk);
+            }
+            if (data.done) {
+              if (onComplete) onComplete();
+              return;
+            }
+          } catch (e) {}
+        }
+      }
+    }
+    if (onComplete) onComplete();
+  } catch (err) {
+    if (onError) onError(err);
+  }
+};
+
+// 图片上传
+export const uploadImage = (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post('/upload/image', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }).then(res => res.data);
+};
+
+// 笔记加锁与二次验证
+export const lockNote = (id, password) => api.post(`/notes/${id}/lock`, { password }).then(res => res.data);
+export const verifyNotePassword = (id, password) => api.post(`/notes/${id}/verify-password`, { password }).then(res => res.data);
+export const unlockNote = (id, password) => api.post(`/notes/${id}/unlock`, { password }).then(res => res.data);
+
+export default api;

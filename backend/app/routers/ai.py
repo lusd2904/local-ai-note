@@ -1,0 +1,221 @@
+import json
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+from ..database import get_db
+from ..models import AISetting
+from ..schemas import AIAnalyzeRequest, AIChatRequest, AISettingUpdate, AISettingOut
+from ..services.ai_service import AIService, get_ai_config, get_openai_client
+
+router = APIRouter(prefix="/api/ai", tags=["AI Copilot & Settings"])
+
+@router.post("/analyze")
+async def analyze_content(data: AIAnalyzeRequest, db: Session = Depends(get_db)):
+    """非流式快捷算子（兼容旧接口）"""
+    result = await AIService.analyze_note(
+        content=data.content,
+        action=data.action,
+        target_lang=data.target_lang or "English",
+        db=db
+    )
+    return {"status": "success", "action": data.action, "result": result}
+
+@router.post("/analyze/stream")
+async def analyze_content_stream(data: AIAnalyzeRequest, db: Session = Depends(get_db)):
+    """流式执行 AI 快捷算子 (SSE Server-Sent Events 打字机输出)"""
+    async def event_generator():
+        try:
+            async for chunk in AIService.analyze_note_stream(
+                content=data.content,
+                action=data.action,
+                target_lang=data.target_lang or "English",
+                db=db
+            ):
+                payload = json.dumps({"chunk": chunk, "done": False}, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
+            yield f"data: {json.dumps({'chunk': '', 'done': True})}\n\n"
+        except Exception as e:
+            err_payload = json.dumps({"error": str(e), "done": True}, ensure_ascii=False)
+            yield f"data: {err_payload}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@router.post("/chat")
+async def chat_with_note(data: AIChatRequest, db: Session = Depends(get_db)):
+    """非流式问答（兼容旧接口）"""
+    messages_payload = [{"role": m.role, "content": m.content} for m in data.messages]
+    note_ctx = f"标题: {data.note_title}\n内容:\n{data.note_content}" if data.note_content else ""
+    
+    reply = await AIService.chat_with_note(
+        messages=messages_payload,
+        note_context=note_ctx,
+        audio_context=data.audio_transcript or "",
+        db=db
+    )
+    return {"status": "success", "reply": reply}
+
+@router.post("/chat/stream")
+async def chat_with_note_stream(data: AIChatRequest, db: Session = Depends(get_db)):
+    """流式智能问答 (SSE Server-Sent Events)"""
+    messages_payload = [{"role": m.role, "content": m.content} for m in data.messages]
+    note_ctx = f"标题: {data.note_title}\n内容:\n{data.note_content}" if data.note_content else ""
+
+    async def event_generator():
+        try:
+            async for chunk in AIService.chat_with_note_stream(
+                messages=messages_payload,
+                note_context=note_ctx,
+                audio_context=data.audio_transcript or "",
+                db=db
+            ):
+                payload = json.dumps({"chunk": chunk, "done": False}, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
+            yield f"data: {json.dumps({'chunk': '', 'done': True})}\n\n"
+        except Exception as e:
+            err_payload = json.dumps({"error": str(e), "done": True}, ensure_ascii=False)
+            yield f"data: {err_payload}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+DEFAULT_PROVIDERS_CONFIG = {
+    "claude": {
+        "provider": "claude",
+        "name": "Claude / Code",
+        "base_url": "https://api.anthropic.com/v1",
+        "api_key": "",
+        "model_name": "claude-3-7-sonnet-20250219",
+        "reasoning_effort": "medium",
+        "temperature": 0.7
+    },
+    "deepseek": {
+        "provider": "deepseek",
+        "name": "DeepSeek",
+        "base_url": "https://api.deepseek.com/v1",
+        "api_key": "",
+        "model_name": "deepseek-chat",
+        "reasoning_effort": "medium",
+        "temperature": 0.7
+    },
+    "openai": {
+        "provider": "openai",
+        "name": "OpenAI",
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "",
+        "model_name": "gpt-4o",
+        "reasoning_effort": "medium",
+        "temperature": 0.7
+    },
+    "ollama": {
+        "provider": "ollama",
+        "name": "本地离线 Ollama",
+        "base_url": "http://localhost:11434/v1",
+        "api_key": "ollama",
+        "model_name": "qwen2.5:7b",
+        "reasoning_effort": "disabled",
+        "temperature": 0.7
+    }
+}
+
+@router.get("/settings", response_model=AISettingOut)
+def get_ai_settings(db: Session = Depends(get_db)):
+    """获取当前的 AI 配置（支持多渠道独立配置、推理强度与默认生效渠道回显）"""
+    setting = db.query(AISetting).filter(AISetting.id == "default").first()
+    if not setting:
+        setting = AISetting(id="default")
+        db.add(setting)
+        db.commit()
+        db.refresh(setting)
+
+    # 1. 解析多渠道配置字典
+    saved_providers = {}
+    try:
+        saved_providers = json.loads(setting.providers_config) if setting.providers_config else {}
+    except Exception:
+        saved_providers = {}
+
+    merged_providers = json.loads(json.dumps(DEFAULT_PROVIDERS_CONFIG))
+    for k, v in saved_providers.items():
+        if k in merged_providers and isinstance(v, dict):
+            merged_providers[k].update(v)
+        else:
+            merged_providers[k] = v
+
+    active_prov = setting.active_provider or setting.provider or "claude"
+    active_cfg = merged_providers.get(active_prov, merged_providers["claude"])
+
+    masked_key = ""
+    cur_key = active_cfg.get("api_key") or setting.api_key or ""
+    if cur_key:
+        if len(cur_key) > 8:
+            masked_key = cur_key[:3] + "..." + cur_key[-4:]
+        else:
+            masked_key = "***"
+
+    return {
+        "active_provider": active_prov,
+        "providers_config": merged_providers,
+        "provider": active_prov,
+        "api_key": cur_key,
+        "api_key_masked": masked_key,
+        "base_url": active_cfg.get("base_url") or setting.base_url or "https://api.anthropic.com/v1",
+        "model_name": active_cfg.get("model_name") or setting.model_name or "claude-3-7-sonnet-20250219",
+        "reasoning_effort": active_cfg.get("reasoning_effort") or setting.reasoning_effort or "medium",
+        "whisper_model": setting.whisper_model or "whisper-1",
+        "temperature": active_cfg.get("temperature", 0.7)
+    }
+
+@router.post("/settings")
+def update_ai_settings(data: AISettingUpdate, db: Session = Depends(get_db)):
+    """更新 AI 配置（完整持久化 provider, reasoning_effort, api_key 等）"""
+    setting = db.query(AISetting).filter(AISetting.id == "default").first()
+    if not setting:
+        setting = AISetting(id="default")
+        db.add(setting)
+
+    # 1. 更新多渠道配置字典
+    current_providers = {}
+    try:
+        current_providers = json.loads(setting.providers_config) if setting.providers_config else {}
+    except Exception:
+        current_providers = {}
+
+    if data.providers_config:
+        current_providers.update(data.providers_config)
+        setting.providers_config = json.dumps(current_providers, ensure_ascii=False)
+
+    # 2. 更新当前默认激活渠道
+    active_p = data.active_provider or data.provider
+    if active_p:
+        setting.active_provider = active_p
+        setting.provider = active_p
+
+        if active_p in current_providers:
+            p_info = current_providers[active_p]
+            setting.base_url = p_info.get("base_url", setting.base_url)
+            setting.api_key = p_info.get("api_key", setting.api_key)
+            setting.model_name = p_info.get("model_name", setting.model_name)
+            setting.reasoning_effort = p_info.get("reasoning_effort", setting.reasoning_effort)
+            setting.temperature = p_info.get("temperature", setting.temperature)
+
+    if data.api_key is not None:
+        setting.api_key = data.api_key
+        if active_p in current_providers: current_providers[active_p]["api_key"] = data.api_key
+    if data.base_url is not None:
+        setting.base_url = data.base_url
+        if active_p in current_providers: current_providers[active_p]["base_url"] = data.base_url
+    if data.model_name is not None:
+        setting.model_name = data.model_name
+        if active_p in current_providers: current_providers[active_p]["model_name"] = data.model_name
+    if data.reasoning_effort is not None:
+        setting.reasoning_effort = data.reasoning_effort
+        if active_p in current_providers: current_providers[active_p]["reasoning_effort"] = data.reasoning_effort
+    if data.whisper_model is not None:
+        setting.whisper_model = data.whisper_model
+    if data.temperature is not None:
+        setting.temperature = data.temperature
+        if active_p in current_providers: current_providers[active_p]["temperature"] = data.temperature
+
+    setting.providers_config = json.dumps(current_providers, ensure_ascii=False)
+    db.commit()
+    db.refresh(setting)
+    return {"status": "success", "message": "AI settings updated successfully"}
