@@ -151,12 +151,30 @@ def get_ai_settings(db: Session = Depends(get_db)):
         else:
             masked_key = "***"
 
+    # 安全处理：遮蔽所有渠道的 API Key，避免完整密钥暴露给前端
+    safe_providers = {}
+    for prov_key, prov_cfg in merged_providers.items():
+        safe_cfg = prov_cfg.copy()
+        key = safe_cfg.get("api_key", "")
+        if key:
+            if len(key) > 8:
+                safe_cfg["api_key_masked"] = key[:3] + "..." + key[-4:]
+            else:
+                safe_cfg["api_key_masked"] = "***"
+            safe_cfg["api_key_configured"] = True
+            del safe_cfg["api_key"]  # 移除完整密钥
+        else:
+            safe_cfg["api_key_masked"] = ""
+            safe_cfg["api_key_configured"] = False
+        safe_providers[prov_key] = safe_cfg
+
     return {
         "active_provider": active_prov,
-        "providers_config": merged_providers,
+        "providers_config": safe_providers,
         "provider": active_prov,
-        "api_key": cur_key,
+        "api_key": "",  # 不返回完整密钥
         "api_key_masked": masked_key,
+        "api_key_configured": bool(cur_key),  # 仅返回是否已配置
         "base_url": active_cfg.get("base_url") or setting.base_url or "https://api.anthropic.com/v1",
         "model_name": active_cfg.get("model_name") or setting.model_name or "claude-3-7-sonnet-20250219",
         "reasoning_effort": active_cfg.get("reasoning_effort") or setting.reasoning_effort or "medium",
