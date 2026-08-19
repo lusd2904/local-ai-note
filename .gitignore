@@ -12,6 +12,7 @@ backups/
 *.sqlite3
 uploads/
 *.log
+next_plan.md
 
 # macOS 系统缓存
 .DS_Store
