@@ -1,0 +1,34 @@
+name: NoteApp
+options:
+  bundleIdPrefix: com.localai.note
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    PRODUCT_NAME: Local AI Note
+    TARGETED_DEVICE_FAMILY: "1,2" # iPhone and iPad
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+
+targets:
+  NoteApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: NoteApp
+        excludes:
+          - "www/**"
+      - path: NoteApp/www
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        INFOPLIST_FILE: NoteApp/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.localai.note.ios
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_BITCODE: NO
+        GENERATE_INFOPLIST_FILE: NO
