@@ -449,15 +449,15 @@ export default function App() {
             }
           }} />
         ) : currentView === 'ai_doubao' ? (
-          <EmbeddedWebAIView key="doubao" title="豆包" url="https://www.doubao.com/chat/" icon="🥣" />
+          <EmbeddedWebAIView key="doubao" title="豆包" url="https://www.doubao.com/chat/" iconSrc="/icons/doubao.svg" />
         ) : currentView === 'ai_deepseek' ? (
-          <EmbeddedWebAIView key="deepseek" title="DeepSeek" url="https://chat.deepseek.com/" icon="🐋" />
+          <EmbeddedWebAIView key="deepseek" title="DeepSeek" url="https://chat.deepseek.com/" iconSrc="/icons/deepseek.svg" />
         ) : currentView === 'ai_kimi' ? (
-          <EmbeddedWebAIView key="kimi" title="Kimi" url="https://kimi.moonshot.cn/" icon="🌙" />
+          <EmbeddedWebAIView key="kimi" title="Kimi" url="https://kimi.moonshot.cn/" iconSrc="/icons/kimi.svg" />
         ) : currentView === 'ai_grok' ? (
-          <EmbeddedWebAIView key="grok" title="Grok" url="https://grok.com/" icon="⚡️" />
+          <EmbeddedWebAIView key="grok" title="Grok" url="https://grok.com/" iconSrc="/icons/grok.svg" />
         ) : currentView === 'ai_gemini' ? (
-          <EmbeddedWebAIView key="gemini" title="Gemini" url="https://gemini.google.com/" icon="✨" />
+          <EmbeddedWebAIView key="gemini" title="Gemini" url="https://gemini.google.com/" iconSrc="/icons/gemini.svg" />
         ) : (
           <>
             {/* 中间笔记卡片列表 */}

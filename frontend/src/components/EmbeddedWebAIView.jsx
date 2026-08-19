@@ -5,6 +5,7 @@ export default function EmbeddedWebAIView({
   title, 
   url, 
   icon, 
+  iconSrc,
   target = 'doubao',
   badgeColor = 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
 }) {
@@ -28,7 +29,11 @@ export default function EmbeddedWebAIView({
       {/* 顶部操作栏 */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0 bg-gray-50/50 dark:bg-gray-900/50 z-10">
         <div className="flex items-center space-x-3">
-          <span className="text-xl">{icon}</span>
+          {iconSrc ? (
+            <img src={iconSrc} alt={title} className="w-5 h-5 rounded object-contain shrink-0 shadow-xs" />
+          ) : (
+            <span className="text-xl">{icon}</span>
+          )}
           <h2 className="text-sm font-bold text-gray-800 dark:text-gray-200">{title}</h2>
           <div className={`flex items-center space-x-1 px-2 py-0.5 rounded text-xs font-medium ${badgeColor}`}>
             <ShieldCheck className="w-3.5 h-3.5" />

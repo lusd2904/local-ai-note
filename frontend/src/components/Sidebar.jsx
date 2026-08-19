@@ -405,7 +405,7 @@ export default function Sidebar({
               }`}
             >
               <div className="flex items-center space-x-2.5">
-                <span className="w-4 h-4 text-indigo-500 flex items-center justify-center text-sm">🥣</span>
+                <img src="/icons/doubao.svg" alt="豆包" className="w-4 h-4 rounded object-contain shrink-0 shadow-xs" />
                 <span>豆包</span>
               </div>
             </button>
@@ -419,7 +419,7 @@ export default function Sidebar({
               }`}
             >
               <div className="flex items-center space-x-2.5">
-                <span className="w-4 h-4 text-teal-500 flex items-center justify-center text-sm">🐋</span>
+                <img src="/icons/deepseek.svg" alt="DeepSeek" className="w-4 h-4 rounded object-contain shrink-0 shadow-xs" />
                 <span>DeepSeek</span>
               </div>
             </button>
@@ -433,7 +433,7 @@ export default function Sidebar({
               }`}
             >
               <div className="flex items-center space-x-2.5">
-                <span className="w-4 h-4 flex items-center justify-center text-sm">🌙</span>
+                <img src="/icons/kimi.svg" alt="Kimi" className="w-4 h-4 rounded object-contain shrink-0 shadow-xs" />
                 <span>Kimi</span>
               </div>
             </button>
@@ -447,7 +447,7 @@ export default function Sidebar({
               }`}
             >
               <div className="flex items-center space-x-2.5">
-                <span className="w-4 h-4 flex items-center justify-center text-sm">⚡️</span>
+                <img src="/icons/grok.svg" alt="Grok" className="w-4 h-4 rounded object-contain shrink-0 shadow-xs" />
                 <span>Grok</span>
               </div>
             </button>
@@ -461,7 +461,7 @@ export default function Sidebar({
               }`}
             >
               <div className="flex items-center space-x-2.5">
-                <span className="w-4 h-4 flex items-center justify-center text-sm">✨</span>
+                <img src="/icons/gemini.svg" alt="Gemini" className="w-4 h-4 rounded object-contain shrink-0 shadow-xs" />
                 <span>Gemini</span>
               </div>
             </button>
