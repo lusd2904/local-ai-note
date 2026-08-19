@@ -380,88 +380,88 @@ export default function Sidebar({
           </div>
         </div>
         {aiSectionExpanded && (
-          <div className="space-y-1">
+          <div className="space-y-0.5 pl-3">
             <button
               onClick={() => onSelectView('ai_consultation')}
               style={{ WebkitAppRegion: 'no-drag' }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 currentView === 'ai_consultation'
                   ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 font-semibold'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
               }`}
             >
-              <div className="flex items-center space-x-2.5">
-                <Bot className="w-4 h-4 text-blue-500" />
+              <div className="flex items-center space-x-2">
+                <Bot className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                 <span>智能咨询</span>
               </div>
             </button>
             <button
               onClick={() => onSelectView('ai_doubao')}
               style={{ WebkitAppRegion: 'no-drag' }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 currentView === 'ai_doubao'
                   ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-semibold'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
               }`}
             >
-              <div className="flex items-center space-x-2.5">
-                <img src="/icons/doubao.svg" alt="豆包" className="w-4 h-4 rounded object-contain shrink-0 shadow-xs" />
+              <div className="flex items-center space-x-2">
+                <img src="/icons/doubao.svg" alt="豆包" className="w-3.5 h-3.5 rounded object-contain shrink-0 shadow-xs" />
                 <span>豆包</span>
               </div>
             </button>
             <button
               onClick={() => onSelectView('ai_deepseek')}
               style={{ WebkitAppRegion: 'no-drag' }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 currentView === 'ai_deepseek'
                   ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 font-semibold'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
               }`}
             >
-              <div className="flex items-center space-x-2.5">
-                <img src="/icons/deepseek.svg" alt="DeepSeek" className="w-4 h-4 rounded object-contain shrink-0 shadow-xs" />
+              <div className="flex items-center space-x-2">
+                <img src="/icons/deepseek.svg" alt="DeepSeek" className="w-3.5 h-3.5 rounded object-contain shrink-0 shadow-xs" />
                 <span>DeepSeek</span>
               </div>
             </button>
             <button
               onClick={() => onSelectView('ai_kimi')}
               style={{ WebkitAppRegion: 'no-drag' }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 currentView === 'ai_kimi'
                   ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400 font-semibold'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
               }`}
             >
-              <div className="flex items-center space-x-2.5">
-                <img src="/icons/kimi.svg" alt="Kimi" className="w-4 h-4 rounded object-contain shrink-0 shadow-xs" />
+              <div className="flex items-center space-x-2">
+                <img src="/icons/kimi.svg" alt="Kimi" className="w-3.5 h-3.5 rounded object-contain shrink-0 shadow-xs" />
                 <span>Kimi</span>
               </div>
             </button>
             <button
               onClick={() => onSelectView('ai_grok')}
               style={{ WebkitAppRegion: 'no-drag' }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 currentView === 'ai_grok'
                   ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 font-semibold'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
               }`}
             >
-              <div className="flex items-center space-x-2.5">
-                <img src="/icons/grok.svg" alt="Grok" className="w-4 h-4 rounded object-contain shrink-0 shadow-xs" />
+              <div className="flex items-center space-x-2">
+                <img src="/icons/grok.svg" alt="Grok" className="w-3.5 h-3.5 rounded object-contain shrink-0 shadow-xs" />
                 <span>Grok</span>
               </div>
             </button>
             <button
               onClick={() => onSelectView('ai_gemini')}
               style={{ WebkitAppRegion: 'no-drag' }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 currentView === 'ai_gemini'
                   ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 font-semibold'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
               }`}
             >
-              <div className="flex items-center space-x-2.5">
-                <img src="/icons/gemini.svg" alt="Gemini" className="w-4 h-4 rounded object-contain shrink-0 shadow-xs" />
+              <div className="flex items-center space-x-2">
+                <img src="/icons/gemini.svg" alt="Gemini" className="w-3.5 h-3.5 rounded object-contain shrink-0 shadow-xs" />
                 <span>Gemini</span>
               </div>
             </button>
