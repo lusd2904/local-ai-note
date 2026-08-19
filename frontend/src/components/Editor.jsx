@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { HorizontalRule } from '@tiptap/extension-horizontal-rule';
+import { Underline } from '@tiptap/extension-underline';
 import { 
   Bold, Italic, Heading1, Heading2, Heading3, List, ListOrdered, 
   Code, Quote, Image as ImageIcon, Sparkles, Wand2, Tag, 
-  Folder, Network, Bot, Download, Check, RefreshCw, X, FileText, Lock, Unlock, Eye, EyeOff, BookOpenCheck
+  Folder, Network, Bot, Download, Check, RefreshCw, X, FileText, Lock, Unlock, Eye, EyeOff, BookOpenCheck,
+  Table as TableIcon, Minus, Strikethrough, Underline as UnderlineIcon, Copy, Edit3, ChevronDown, CheckCheck
 } from 'lucide-react';
 import { uploadImage, streamAIAnalyze } from '../api/client';
 import LockModal from './LockModal';
@@ -73,12 +81,14 @@ function EditorCore({
   isUnlocked,
   onLockNote,
   onUnlockNote,
-  onRelockNote
+  onRelockNote,
+  onCloneNote
 }) {
   const [title, setTitle] = useState(note?.title || '');
   const [notebookId, setNotebookId] = useState(note?.notebook_id || '');
   const [isLockModalOpen, setIsLockModalOpen] = useState(false);
   const [lockModalMode, setLockModalMode] = useState('lock');
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
   
   const getInitialTags = () => {
     if (Array.isArray(note?.tags)) return note.tags;
@@ -110,6 +120,13 @@ function EditorCore({
           levels: [1, 2, 3]
         }
       }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      HorizontalRule,
+      Underline,
+      Strike,
       Image.configure({
         inline: true,
         allowBase64: true,
@@ -224,6 +241,12 @@ function EditorCore({
       setTags(getInitialTags());
     }
   }, [note?.updated_at]);
+
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) {
+      editor.setEditable(!isPreviewMode);
+    }
+  }, [isPreviewMode, editor]);
 
   // 组件卸载时清理定时器
   useEffect(() => {
@@ -449,15 +472,41 @@ function EditorCore({
             <span>AI 助手</span>
           </button>
 
-          {/* 🌟 Word 导出下载按钮 */}
           <button
-            onClick={handleExportWord}
+            onClick={() => setIsPreviewMode(!isPreviewMode)}
             className="flex items-center space-x-1 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md text-xs font-medium transition"
-            title="导出为 Word (.docx) 并同步保存在本地 data/uploads/exports 目录"
+            title="切换阅读预览/编辑模式"
           >
-            <Download className="w-3.5 h-3.5 text-blue-500" />
-            <span>导出 Word</span>
+            {isPreviewMode ? <Edit3 className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span>{isPreviewMode ? '编辑' : '阅读'}</span>
           </button>
+
+          <button
+            onClick={() => onCloneNote && onCloneNote(note.id)}
+            className="flex items-center space-x-1 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md text-xs font-medium transition"
+            title="创建笔记副本"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">复制副本</span>
+          </button>
+
+          {/* 🌟 多格式导出下拉菜单 */}
+          <div className="relative group/export">
+            <button
+              className="flex items-center space-x-1 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md text-xs font-medium transition"
+              title="导出笔记"
+            >
+              <Download className="w-3.5 h-3.5 text-blue-500" />
+              <span>导出</span>
+              <ChevronDown className="w-3 h-3" />
+            </button>
+            <div className="absolute hidden group-hover/export:flex flex-col right-0 top-full mt-1 bg-white dark:bg-gray-800 shadow-xl border border-gray-100 dark:border-gray-700 rounded overflow-hidden z-50 w-28">
+              <button onClick={() => { window.location.href = `/api/notes/${note.id}/export/docx`; setExportSuccessTip(true); setTimeout(() => setExportSuccessTip(false), 4000); }} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">Word (.docx)</button>
+              <button onClick={() => { window.location.href = `/api/notes/${note.id}/export/md`; }} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">Markdown</button>
+              <button onClick={() => { window.location.href = `/api/notes/${note.id}/export/html`; }} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">HTML</button>
+              <button onClick={() => { window.location.href = `/api/notes/${note.id}/export/txt`; }} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">纯文本</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -486,79 +535,105 @@ function EditorCore({
           value={title}
           onChange={handleTitleChange}
           placeholder="无标题笔记"
+          readOnly={isPreviewMode}
           className="w-full text-2xl font-bold bg-transparent text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none tracking-tight"
         />
 
         {/* 标签栏与 AI 快捷算子 */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-b border-gray-100 dark:border-gray-800/80 pb-3">
-          {/* 标签列表 */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Tag className="w-3.5 h-3.5 text-gray-400 mr-0.5" />
-            {tags.map((t, idx) => (
-              <span
-                key={idx}
-                className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-300 text-xs font-medium"
-              >
-                <span>#{t}</span>
-                <button onClick={() => handleRemoveTag(t)} className="hover:text-red-500">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            ))}
-            <input
-              type="text"
-              placeholder="+ 标签 (回车添加)..."
-              value={newTagInput}
-              onChange={(e) => setNewTagInput(e.target.value)}
-              onKeyDown={handleAddTag}
-              className="bg-transparent text-xs text-gray-600 dark:text-gray-300 placeholder-gray-400 focus:outline-none w-28 px-1"
-            />
-          </div>
+        {!isPreviewMode && (
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-b border-gray-100 dark:border-gray-800/80 pb-3">
+            {/* 标签列表 */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5 text-gray-400 mr-0.5" />
+              {tags.map((t, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-300 text-xs font-medium"
+                >
+                  <span>#{t}</span>
+                  <button onClick={() => handleRemoveTag(t)} className="hover:text-red-500">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                type="text"
+                placeholder="+ 标签 (回车添加)..."
+                value={newTagInput}
+                onChange={(e) => setNewTagInput(e.target.value)}
+                onKeyDown={handleAddTag}
+                className="bg-transparent text-xs text-gray-600 dark:text-gray-300 placeholder-gray-400 focus:outline-none w-28 px-1"
+              />
+            </div>
 
-          {/* AI 快捷操作卡片 */}
-          <div className="flex items-center space-x-1">
-            <button
-              onClick={() => handleRunAIAction('expand')}
-              disabled={isAIAnalyzing}
-              className="flex items-center space-x-1 px-2 py-1 bg-cyan-50 hover:bg-cyan-100 dark:bg-cyan-950/40 dark:hover:bg-cyan-900/60 text-cyan-600 dark:text-cyan-300 rounded text-xs transition font-medium"
-              title="根据简要思路自动查询资料并深度扩写为结构化专业长文"
-            >
-              <BookOpenCheck className="w-3 h-3" />
-              <span>AI 扩写</span>
-            </button>
-            <button
-              onClick={() => handleRunAIAction('summary')}
-              disabled={isAIAnalyzing}
-              className="flex items-center space-x-1 px-2 py-1 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-600 dark:text-purple-300 rounded text-xs transition"
-              title="生成笔记要点总结"
-            >
-              <Sparkles className="w-3 h-3" />
-              <span>AI 摘要</span>
-            </button>
-            <button
-              onClick={() => handleRunAIAction('polish')}
-              disabled={isAIAnalyzing}
-              className="flex items-center space-x-1 px-2 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 rounded text-xs transition"
-              title="优化文字与修正语病"
-            >
-              <Wand2 className="w-3 h-3" />
-              <span>智能润色</span>
-            </button>
-            <button
-              onClick={() => handleRunAIAction('extract_tags')}
-              disabled={isAIAnalyzing}
-              className="flex items-center space-x-1 px-2 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-600 dark:text-amber-300 rounded text-xs transition"
-              title="根据正文智能生成分类标签"
-            >
-              <Tag className="w-3 h-3" />
-              <span>提炼标签</span>
-            </button>
+            {/* AI 快捷操作卡片 */}
+            <div className="flex items-center space-x-1 relative group">
+              <button
+                onClick={() => handleRunAIAction('continue')}
+                disabled={isAIAnalyzing}
+                className="flex items-center space-x-1 px-2 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 rounded text-xs transition font-medium"
+                title="从当前光标处无缝流式插入生成内容"
+              >
+                <span>⚡️ AI 续写</span>
+              </button>
+              <button
+                onClick={() => handleRunAIAction('auto_format')}
+                disabled={isAIAnalyzing}
+                className="flex items-center space-x-1 px-2 py-1 bg-cyan-50 hover:bg-cyan-100 dark:bg-cyan-950/40 dark:hover:bg-cyan-900/60 text-cyan-600 dark:text-cyan-300 rounded text-xs transition font-medium"
+                title="自动重构为结构规范的 Markdown"
+              >
+                <span>🧹 一键格式化</span>
+              </button>
+              <button
+                onClick={() => handleRunAIAction('correct')}
+                disabled={isAIAnalyzing}
+                className="flex items-center space-x-1 px-2 py-1 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-300 rounded text-xs transition"
+                title="修正错别字与语病"
+              >
+                <span>🔍 语法纠错</span>
+              </button>
+              <button
+                onClick={() => handleRunAIAction('summary')}
+                disabled={isAIAnalyzing}
+                className="flex items-center space-x-1 px-2 py-1 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-600 dark:text-purple-300 rounded text-xs transition"
+                title="生成笔记要点总结"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>AI 摘要</span>
+              </button>
+              <div className="relative group/polish">
+                <button
+                  disabled={isAIAnalyzing}
+                  className="flex items-center space-x-1 px-2 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 rounded text-xs transition"
+                  title="优化文字与修正语病"
+                >
+                  <Wand2 className="w-3 h-3" />
+                  <span>智能润色</span>
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                <div className="absolute hidden group-hover/polish:flex flex-col right-0 top-full mt-1 bg-white dark:bg-gray-800 shadow-xl border border-gray-100 dark:border-gray-700 rounded overflow-hidden z-50 w-32">
+                  <button onClick={() => handleRunAIAction('polish_formal')} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">💼 商务正式</button>
+                  <button onClick={() => handleRunAIAction('polish_concise')} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">⚡️ 极简精炼</button>
+                  <button onClick={() => handleRunAIAction('polish_casual')} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">💬 轻松口语</button>
+                  <button onClick={() => handleRunAIAction('polish_academic')} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">🎓 学术专业</button>
+                </div>
+              </div>
+              <button
+                onClick={() => handleRunAIAction('extract_tags')}
+                disabled={isAIAnalyzing}
+                className="flex items-center space-x-1 px-2 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-600 dark:text-amber-300 rounded text-xs transition"
+                title="根据正文智能生成分类标签"
+              >
+                <Tag className="w-3 h-3" />
+                <span>提炼标签</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* 富文本所见即所得工具条 */}
-      {editor && !editor.isDestroyed && (
+      {editor && !editor.isDestroyed && !isPreviewMode && (
         <div className="px-8 py-1.5 flex items-center space-x-1 border-b border-gray-100 dark:border-gray-800 text-gray-500 dark:text-gray-400 text-xs shrink-0 bg-gray-50/50 dark:bg-gray-900/20">
           <button
             onClick={() => runEditorChain(chain => chain.toggleBold())}
@@ -573,6 +648,21 @@ function EditorCore({
             title="斜体"
           >
             <Italic className="w-3.5 h-3.5" />
+          </button>
+          <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700 mx-1" />
+          <button
+            onClick={() => runEditorChain(chain => chain.toggleUnderline())}
+            className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${isFormatActive('underline') ? 'bg-gray-200 dark:bg-gray-700 text-blue-500 font-bold' : ''}`}
+            title="下划线"
+          >
+            <UnderlineIcon className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => runEditorChain(chain => chain.toggleStrike())}
+            className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${isFormatActive('strike') ? 'bg-gray-200 dark:bg-gray-700 text-blue-500 font-bold' : ''}`}
+            title="删除线"
+          >
+            <Strikethrough className="w-3.5 h-3.5" />
           </button>
           <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700 mx-1" />
           <button
@@ -625,6 +715,13 @@ function EditorCore({
           >
             <Quote className="w-3.5 h-3.5" />
           </button>
+          <button
+            onClick={() => runEditorChain(chain => chain.setHorizontalRule())}
+            className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+            title="分割线"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
           <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700 mx-1" />
           <button
             onClick={handleManualImageUpload}
@@ -633,6 +730,25 @@ function EditorCore({
           >
             <ImageIcon className="w-3.5 h-3.5" />
           </button>
+
+          {/* 表格工具 */}
+          <div className="relative group/table ml-1">
+            <button
+              className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-blue-500 flex items-center"
+              title="表格工具"
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              <ChevronDown className="w-2.5 h-2.5 ml-0.5" />
+            </button>
+            <div className="absolute hidden group-hover/table:flex flex-col left-0 top-full mt-1 bg-white dark:bg-gray-800 shadow-xl border border-gray-100 dark:border-gray-700 rounded overflow-hidden z-50 w-32">
+              <button onClick={() => runEditorChain(chain => chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }))} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">插入 3x3 表格</button>
+              <button onClick={() => runEditorChain(chain => chain.addRowAfter())} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">下方添加行</button>
+              <button onClick={() => runEditorChain(chain => chain.deleteRow())} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">删除当前行</button>
+              <button onClick={() => runEditorChain(chain => chain.addColumnAfter())} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">右侧添加列</button>
+              <button onClick={() => runEditorChain(chain => chain.deleteColumn())} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">删除当前列</button>
+              <button onClick={() => runEditorChain(chain => chain.deleteTable())} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-red-500">删除整个表格</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -648,7 +764,19 @@ function EditorCore({
         }}
       >
         {editor && !editor.isDestroyed ? (
-          <EditorContent editor={editor} />
+          <>
+            <EditorContent editor={editor} />
+            {editor && !isPreviewMode && (
+              <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }} className="flex items-center space-x-1 bg-white dark:bg-gray-800 shadow-xl border border-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 z-50">
+                <button onClick={() => runEditorChain(chain => chain.toggleBold())} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${isFormatActive('bold') ? 'text-blue-500' : 'text-gray-600 dark:text-gray-300'}`}><Bold className="w-3.5 h-3.5" /></button>
+                <button onClick={() => runEditorChain(chain => chain.toggleItalic())} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${isFormatActive('italic') ? 'text-blue-500' : 'text-gray-600 dark:text-gray-300'}`}><Italic className="w-3.5 h-3.5" /></button>
+                <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
+                <button onClick={() => handleRunAIAction('polish')} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-emerald-500 flex items-center space-x-1 text-xs"><Wand2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">润色</span></button>
+                <button onClick={() => handleRunAIAction('expand')} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-500 flex items-center space-x-1 text-xs"><BookOpenCheck className="w-3.5 h-3.5" /><span className="hidden sm:inline">扩写</span></button>
+                <button onClick={() => handleRunAIAction('correct')} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-red-500 flex items-center space-x-1 text-xs"><CheckCheck className="w-3.5 h-3.5" /><span className="hidden sm:inline">纠错</span></button>
+              </BubbleMenu>
+            )}
+          </>
         ) : (
           <div className="p-8 text-gray-400 text-xs animate-pulse">正在准备编辑器...</div>
         )}

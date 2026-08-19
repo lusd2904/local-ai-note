@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { 
   BookOpen, Folder, FolderPlus, Star, Trash2, Mic, 
   Settings, Moon, Sun, ChevronRight, ChevronDown, Plus, 
-  Edit2, Check, X, CornerDownRight, Bot, Sparkles, ExternalLink, Globe
+  Edit2, Check, X, CornerDownRight, Bot, Sparkles, ExternalLink, Globe,
+  Calendar, Download
 } from 'lucide-react';
 
 // 将扁平笔记本数组转换为树形结构
@@ -212,7 +213,9 @@ export default function Sidebar({
   totalNotesCount,
   trashNotesCount,
   starredNotesCount,
-  audioRecordsCount
+  audioRecordsCount,
+  onOpenDailyNote,
+  onBatchImport
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalParentId, setModalParentId] = useState('');
@@ -250,6 +253,25 @@ export default function Sidebar({
         <span className="text-xs font-bold text-gray-500 dark:text-gray-400 tracking-wider">
           NOTE
         </span>
+        <label
+          style={{ WebkitAppRegion: 'no-drag' }}
+          className="cursor-pointer p-1 text-gray-400 hover:text-blue-500 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition"
+          title="批量导入本地笔记 (.md, .txt)"
+        >
+          <input 
+            type="file" 
+            multiple 
+            accept=".md,.txt" 
+            className="hidden" 
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                onBatchImport(e.target.files);
+              }
+              e.target.value = ''; // 允许重复选择同名文件
+            }} 
+          />
+          <Download className="w-4 h-4" />
+        </label>
       </div>
 
       {/* 导航菜单 */}
@@ -271,6 +293,18 @@ export default function Sidebar({
           <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 font-mono">
             {totalNotesCount}
           </span>
+        </button>
+
+        {/* 📅 每日日志 */}
+        <button
+          onClick={() => onOpenDailyNote && onOpenDailyNote()}
+          style={{ WebkitAppRegion: 'no-drag' }}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60"
+        >
+          <div className="flex items-center space-x-2.5">
+            <Calendar className="w-4 h-4 text-green-500" />
+            <span>每日日志</span>
+          </div>
         </button>
 
         {/* 🎙️ 语音录音工坊 */}

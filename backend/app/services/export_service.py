@@ -175,3 +175,89 @@ class ExportService:
         file_path = export_dir / f"{safe_title}.docx"
         doc.save(str(file_path))
         return file_path
+
+    @staticmethod
+    def export_markdown(title: str, content: str, tags: list = None, updated_at: str = None) -> Path:
+        from ..config import EXPORTS_DIR
+        export_dir = EXPORTS_DIR
+        export_dir.mkdir(parents=True, exist_ok=True)
+        safe_title = re.sub(r'[\/\\:\*\?"<>\|]', '_', title or "note")[:50]
+        file_path = export_dir / f"{safe_title}.md"
+        
+        tags_str = f"[{', '.join(tags)}]" if tags else "[]"
+        date_str = updated_at or datetime.now().strftime('%Y-%m-%d %H:%M')
+        
+        frontmatter = f"---\ntitle: {title}\ndate: {date_str}\ntags: {tags_str}\n---\n\n"
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(frontmatter + (content or ""))
+            
+        return file_path
+
+    @staticmethod
+    def export_txt(title: str, content: str, tags: list = None, updated_at: str = None) -> Path:
+        from ..config import EXPORTS_DIR
+        export_dir = EXPORTS_DIR
+        export_dir.mkdir(parents=True, exist_ok=True)
+        safe_title = re.sub(r'[\/\\:\*\?"<>\|]', '_', title or "note")[:50]
+        file_path = export_dir / f"{safe_title}.txt"
+        
+        header = f"标题: {title}\n更新时间: {updated_at or datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+        if tags:
+            header += f"标签: {', '.join(tags)}\n"
+        header += "-" * 40 + "\n\n"
+        
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(header + (content or ""))
+            
+        return file_path
+
+    @staticmethod
+    def export_html(title: str, content: str, tags: list = None, updated_at: str = None) -> Path:
+        from ..config import EXPORTS_DIR
+        export_dir = EXPORTS_DIR
+        export_dir.mkdir(parents=True, exist_ok=True)
+        safe_title = re.sub(r'[\/\\:\*\?"<>\|]', '_', title or "note")[:50]
+        file_path = export_dir / f"{safe_title}.html"
+
+        try:
+            import markdown
+            html_content = markdown.markdown(content or "", extensions=['extra', 'codehilite'])
+        except Exception:
+            import html as html_lib
+            escaped = html_lib.escape(content or "")
+            html_content = f"<pre style='white-space: pre-wrap;'>{escaped}</pre>"
+        
+        html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }}
+        .prose pre {{ background-color: #f3f4f6; padding: 1rem; border-radius: 0.375rem; overflow-x: auto; }}
+        .prose code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }}
+    </style>
+</head>
+<body class="bg-gray-50 py-8">
+    <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-sm">
+        <h1 class="text-3xl font-bold text-gray-900 mb-4">{title}</h1>
+        <div class="text-sm text-gray-500 mb-8 pb-4 border-b">
+            <span>更新时间: {updated_at or datetime.now().strftime('%Y-%m-%d %H:%M')}</span>
+"""
+        if tags:
+            html += f"""            <span class="ml-4">标签: {', '.join(tags)}</span>\n"""
+        
+        html += f"""        </div>
+        <article class="prose max-w-none">
+            {html_content}
+        </article>
+    </div>
+</body>
+</html>"""
+        
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(html)
+            
+        return file_path

@@ -12,7 +12,8 @@ import EmbeddedWebAIView from './components/EmbeddedWebAIView';
 import { 
   getNotebooks, createNotebook, updateNotebook, deleteNotebook,
   getNotes, getNote, createNote, updateNote, deleteNote, restoreNote, emptyTrash,
-  getAudioRecords, analyzeContent, lockNote, unlockNote, verifyNotePassword
+  getAudioRecords, analyzeContent, lockNote, unlockNote, verifyNotePassword,
+  cloneNote, batchImportNotes
 } from './api/client';
 
 export default function App() {
@@ -323,6 +324,52 @@ export default function App() {
     }
   };
 
+  const handleOpenDailyNote = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const dailyNoteTitle = `每日日志 ${today}`;
+    try {
+      const allNotes = await getNotes();
+      const existing = allNotes.find(n => n.title.includes(today) || n.title === dailyNoteTitle);
+      if (existing) {
+        handleSelectView('all');
+        handleSelectNote(existing.id);
+      } else {
+        const newNote = await createNote({
+          title: dailyNoteTitle,
+          content: `# ${dailyNoteTitle}\n\n## 📝 今日待办\n- [ ] \n\n## 💡 想法记录\n- \n\n## 🎯 总结\n- `,
+          content_json: '',
+          notebook_id: null
+        });
+        await fetchNotes();
+        handleSelectView('all');
+        handleSelectNote(newNote.id);
+      }
+    } catch (err) {
+      alert('打开每日日志失败: ' + err.message);
+    }
+  };
+
+  const handleBatchImport = async (files) => {
+    try {
+      const res = await batchImportNotes(files);
+      await fetchNotes();
+      alert(`成功导入 ${res.count || files.length} 篇笔记`);
+      // 可以在这里选中第一篇导入的笔记
+    } catch (err) {
+      alert('批量导入失败: ' + err.message);
+    }
+  };
+
+  const handleCloneNote = async (id) => {
+    try {
+      const cloned = await cloneNote(id);
+      await fetchNotes();
+      handleSelectNote(cloned.id);
+    } catch (err) {
+      alert('克隆笔记失败: ' + err.message);
+    }
+  };
+
   // 思维导图与 AI 助手弹窗触发
   const handleOpenMindMap = (content) => {
     setMindMapContent(content);
@@ -366,6 +413,8 @@ export default function App() {
           trashNotesCount={trashCount}
           starredNotesCount={starredCount}
           audioRecordsCount={audioRecords.length}
+          onOpenDailyNote={handleOpenDailyNote}
+          onBatchImport={handleBatchImport}
         />
 
         {/* 2. 主区域：根据当前视图切换显示 笔记列表+编辑器 或 录音工坊 或 AI 视图 */}
@@ -427,6 +476,7 @@ export default function App() {
               onLockNote={handleLockNote}
               onUnlockNote={handleUnlockNote}
               onRelockNote={handleRelockNote}
+              onCloneNote={handleCloneNote}
             />
           </>
         )}

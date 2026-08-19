@@ -153,4 +153,16 @@ export const lockNote = (id, password) => api.post(`/notes/${id}/lock`, { passwo
 export const verifyNotePassword = (id, password) => api.post(`/notes/${id}/verify-password`, { password }).then(res => res.data);
 export const unlockNote = (id, password) => api.post(`/notes/${id}/unlock`, { password }).then(res => res.data);
 
+// 笔记克隆与批量导入
+export const cloneNote = (id) => api.post(`/notes/${id}/clone`).then(res => res.data);
+export const batchImportNotes = (files) => {
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append('files', files[i]);
+  }
+  return api.post('/notes/batch-import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }).then(res => res.data);
+};
+
 export default api;

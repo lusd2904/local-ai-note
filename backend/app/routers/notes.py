@@ -2,7 +2,7 @@ import json
 import secrets
 import hashlib
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, desc
 from ..database import get_db
@@ -337,9 +337,9 @@ def empty_trash(db: Session = Depends(get_db)):
     db.commit()
     return {"status": "success", "message": "Trash emptied successfully"}
 
-@router.get("/{note_id}/export/docx")
-def export_note_docx(note_id: str, db: Session = Depends(get_db)):
-    """导出单篇笔记为微软 Word 文档 (.docx)"""
+@router.get("/{note_id}/export/{format}")
+def export_note(note_id: str, format: str, db: Session = Depends(get_db)):
+    """导出单篇笔记为指定格式"""
     from fastapi.responses import FileResponse
     from urllib.parse import quote
     from ..services.export_service import ExportService
@@ -354,20 +354,128 @@ def export_note_docx(note_id: str, db: Session = Depends(get_db)):
     except Exception:
         tags_list = []
 
-    file_path = ExportService.markdown_to_docx(
-        title=note.title,
-        content=note.content,
-        tags=tags_list,
-        updated_at=note.updated_at.strftime("%Y-%m-%d %H:%M") if note.updated_at else None
-    )
+    updated_at_str = note.updated_at.strftime("%Y-%m-%d %H:%M") if note.updated_at else None
 
-    filename = f"{note.title or 'note'}.docx"
+    if format == "docx":
+        file_path = ExportService.markdown_to_docx(
+            title=note.title, content=note.content, tags=tags_list, updated_at=updated_at_str
+        )
+        media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    elif format == "md":
+        file_path = ExportService.export_markdown(
+            title=note.title, content=note.content, tags=tags_list, updated_at=updated_at_str
+        )
+        media_type = "text/markdown"
+    elif format == "txt":
+        file_path = ExportService.export_txt(
+            title=note.title, content=note.content, tags=tags_list, updated_at=updated_at_str
+        )
+        media_type = "text/plain"
+    elif format == "html":
+        file_path = ExportService.export_html(
+            title=note.title, content=note.content, tags=tags_list, updated_at=updated_at_str
+        )
+        media_type = "text/html"
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported format")
+
+    filename = f"{note.title or 'note'}.{format}"
     encoded_filename = quote(filename)
 
     return FileResponse(
         path=str(file_path),
         filename=filename,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        media_type=media_type,
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
     )
 
+@router.post("/{note_id}/clone", response_model=NoteOut)
+def clone_note(note_id: str, db: Session = Depends(get_db)):
+    """克隆单篇笔记"""
+    original = db.query(Note).filter(Note.id == note_id).first()
+    if not original:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    new_note = Note(
+        title=f"{original.title} (副本)" if original.title else "无标题笔记 (副本)",
+        content=original.content,
+        content_json=original.content_json,
+        notebook_id=original.notebook_id,
+        summary=original.summary,
+        tags=original.tags,
+        is_starred=False,
+        is_trashed=False,
+        is_locked=original.is_locked,
+        password_hash=original.password_hash
+    )
+    db.add(new_note)
+    db.commit()
+    db.refresh(new_note)
+
+    tags_list = []
+    try:
+        tags_list = json.loads(new_note.tags) if new_note.tags else []
+    except Exception:
+        tags_list = []
+
+    is_locked = bool(new_note.is_locked)
+    return {
+        "id": new_note.id,
+        "title": new_note.title,
+        "content": "" if is_locked else new_note.content,
+        "content_json": "" if is_locked else new_note.content_json,
+        "notebook_id": new_note.notebook_id,
+        "summary": "🔒 此重要笔记已设置密码锁定保护" if is_locked else new_note.summary,
+        "tags": tags_list,
+        "is_starred": new_note.is_starred,
+        "is_trashed": new_note.is_trashed,
+        "is_locked": is_locked,
+        "created_at": new_note.created_at,
+        "updated_at": new_note.updated_at,
+        "audio_count": 0
+    }
+
+@router.post("/batch-import", response_model=List[NoteOut])
+async def batch_import(files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
+    """批量导入 Markdown 或 TXT 文件"""
+    import os
+    created_notes = []
+    for file in files:
+        if not file.filename.endswith(('.md', '.txt')):
+            continue
+        
+        content_bytes = await file.read()
+        content = content_bytes.decode('utf-8', errors='ignore')
+        title = os.path.splitext(file.filename)[0]
+        
+        new_note = Note(
+            title=title,
+            content=content,
+            content_json="",
+            notebook_id=None,
+            summary="",
+            tags="[]",
+            is_starred=False,
+            is_trashed=False,
+            is_locked=False
+        )
+        db.add(new_note)
+        db.commit()
+        db.refresh(new_note)
+        
+        created_notes.append({
+            "id": new_note.id,
+            "title": new_note.title,
+            "content": new_note.content,
+            "content_json": new_note.content_json,
+            "notebook_id": new_note.notebook_id,
+            "summary": new_note.summary,
+            "tags": [],
+            "is_starred": new_note.is_starred,
+            "is_trashed": new_note.is_trashed,
+            "is_locked": False,
+            "created_at": new_note.created_at,
+            "updated_at": new_note.updated_at,
+            "audio_count": 0
+        })
+    return created_notes
