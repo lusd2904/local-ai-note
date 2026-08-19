@@ -330,31 +330,6 @@ export default function App() {
     }
   };
 
-  const handleOpenDailyNote = async () => {
-    const today = new Date().toISOString().split('T')[0];
-    const dailyNoteTitle = `每日日志 ${today}`;
-    try {
-      const allNotes = await getNotes();
-      const existing = allNotes.find(n => n.title.includes(today) || n.title === dailyNoteTitle);
-      if (existing) {
-        handleSelectView('all');
-        handleSelectNote(existing.id);
-      } else {
-        const newNote = await createNote({
-          title: dailyNoteTitle,
-          content: `# ${dailyNoteTitle}\n\n## 📝 今日待办\n- [ ] \n\n## 💡 想法记录\n- \n\n## 🎯 总结\n- `,
-          content_json: '',
-          notebook_id: null
-        });
-        await fetchNotes();
-        handleSelectView('all');
-        handleSelectNote(newNote.id);
-      }
-    } catch (err) {
-      alert('打开每日日志失败: ' + err.message);
-    }
-  };
-
   const handleBatchImport = async (files) => {
     try {
       const res = await batchImportNotes(files);
@@ -419,7 +394,6 @@ export default function App() {
           trashNotesCount={trashCount}
           starredNotesCount={starredCount}
           audioRecordsCount={audioRecords.length}
-          onOpenDailyNote={handleOpenDailyNote}
           onBatchImport={handleBatchImport}
         />
 
