@@ -108,6 +108,15 @@ function EditorCore({
   const [isAIAnalyzing, setIsAIAnalyzing] = useState(false);
   const [aiActionTip, setAiActionTip] = useState('');
   const [exportSuccessTip, setExportSuccessTip] = useState(false);
+  
+  // 🌟 下拉菜单交互状态
+  const [showTableMenu, setShowTableMenu] = useState(false);
+  const [showPolishMenu, setShowPolishMenu] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const tableMenuRef = useRef(null);
+  const polishMenuRef = useRef(null);
+  const exportMenuRef = useRef(null);
+
   const saveTimeoutRef = useRef(null);
   const noteIdRef = useRef(note?.id);
   noteIdRef.current = note?.id;
@@ -247,9 +256,22 @@ function EditorCore({
     }
   }, [isPreviewMode, editor]);
 
-  // 组件卸载时清理定时器
+  // 组件卸载时清理定时器与全局下拉监听
   useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (tableMenuRef.current && !tableMenuRef.current.contains(e.target)) {
+        setShowTableMenu(false);
+      }
+      if (polishMenuRef.current && !polishMenuRef.current.contains(e.target)) {
+        setShowPolishMenu(false);
+      }
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, []);
@@ -490,21 +512,69 @@ function EditorCore({
           </button>
 
           {/* 🌟 多格式导出下拉菜单 */}
-          <div className="relative group/export">
+          <div className="relative" ref={exportMenuRef}>
             <button
-              className="flex items-center space-x-1 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md text-xs font-medium transition"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowExportMenu(!showExportMenu);
+              }}
+              className={`flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium transition ${
+                showExportMenu
+                  ? 'bg-gray-200 dark:bg-gray-700 text-blue-600 font-semibold'
+                  : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'
+              }`}
               title="导出笔记"
             >
               <Download className="w-3.5 h-3.5 text-blue-500" />
               <span>导出</span>
               <ChevronDown className="w-3 h-3" />
             </button>
-            <div className="absolute hidden group-hover/export:flex flex-col right-0 top-full mt-1 bg-white dark:bg-gray-800 shadow-xl border border-gray-100 dark:border-gray-700 rounded overflow-hidden z-50 w-28">
-              <button onClick={() => { window.location.href = `/api/notes/${note.id}/export/docx`; setExportSuccessTip(true); setTimeout(() => setExportSuccessTip(false), 4000); }} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">Word (.docx)</button>
-              <button onClick={() => { window.location.href = `/api/notes/${note.id}/export/md`; }} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">Markdown</button>
-              <button onClick={() => { window.location.href = `/api/notes/${note.id}/export/html`; }} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">HTML</button>
-              <button onClick={() => { window.location.href = `/api/notes/${note.id}/export/txt`; }} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">纯文本</button>
-            </div>
+            {showExportMenu && (
+              <div className="absolute flex flex-col right-0 top-full mt-1 bg-white dark:bg-gray-800 shadow-2xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden z-50 w-32 py-1 animate-fadeIn">
+                <button
+                  onClick={() => {
+                    window.location.href = `/api/notes/${note.id}/export/docx`;
+                    setExportSuccessTip(true);
+                    setTimeout(() => setExportSuccessTip(false), 4000);
+                    setShowExportMenu(false);
+                  }}
+                  className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 transition flex items-center space-x-1.5"
+                >
+                  <span>📄</span>
+                  <span>Word (.docx)</span>
+                </button>
+                <button
+                  onClick={() => {
+                    window.location.href = `/api/notes/${note.id}/export/md`;
+                    setShowExportMenu(false);
+                  }}
+                  className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 transition flex items-center space-x-1.5"
+                >
+                  <span>📝</span>
+                  <span>Markdown</span>
+                </button>
+                <button
+                  onClick={() => {
+                    window.location.href = `/api/notes/${note.id}/export/html`;
+                    setShowExportMenu(false);
+                  }}
+                  className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 transition flex items-center space-x-1.5"
+                >
+                  <span>🌐</span>
+                  <span>HTML</span>
+                </button>
+                <button
+                  onClick={() => {
+                    window.location.href = `/api/notes/${note.id}/export/txt`;
+                    setShowExportMenu(false);
+                  }}
+                  className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 transition flex items-center space-x-1.5"
+                >
+                  <span>📄</span>
+                  <span>纯文本</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -600,22 +670,68 @@ function EditorCore({
                 <Sparkles className="w-3 h-3" />
                 <span>AI 摘要</span>
               </button>
-              <div className="relative group/polish">
+              <div className="relative" ref={polishMenuRef}>
                 <button
                   disabled={isAIAnalyzing}
-                  className="flex items-center space-x-1 px-2 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 rounded text-xs transition"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowPolishMenu(!showPolishMenu);
+                  }}
+                  className={`flex items-center space-x-1 px-2 py-1 rounded text-xs transition ${
+                    showPolishMenu
+                      ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 font-semibold'
+                      : 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300'
+                  }`}
                   title="优化文字与修正语病"
                 >
                   <Wand2 className="w-3 h-3" />
                   <span>智能润色</span>
                   <ChevronDown className="w-3 h-3" />
                 </button>
-                <div className="absolute hidden group-hover/polish:flex flex-col right-0 top-full mt-1 bg-white dark:bg-gray-800 shadow-xl border border-gray-100 dark:border-gray-700 rounded overflow-hidden z-50 w-32">
-                  <button onClick={() => handleRunAIAction('polish_formal')} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">💼 商务正式</button>
-                  <button onClick={() => handleRunAIAction('polish_concise')} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">⚡️ 极简精炼</button>
-                  <button onClick={() => handleRunAIAction('polish_casual')} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">💬 轻松口语</button>
-                  <button onClick={() => handleRunAIAction('polish_academic')} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">🎓 学术专业</button>
-                </div>
+                {showPolishMenu && (
+                  <div className="absolute flex flex-col right-0 top-full mt-1 bg-white dark:bg-gray-800 shadow-2xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden z-50 w-36 py-1 animate-fadeIn">
+                    <button
+                      onClick={() => {
+                        handleRunAIAction('polish_formal');
+                        setShowPolishMenu(false);
+                      }}
+                      className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-gray-700 hover:text-emerald-600 transition flex items-center space-x-1.5"
+                    >
+                      <span>💼</span>
+                      <span>商务正式</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleRunAIAction('polish_concise');
+                        setShowPolishMenu(false);
+                      }}
+                      className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-gray-700 hover:text-emerald-600 transition flex items-center space-x-1.5"
+                    >
+                      <span>⚡️</span>
+                      <span>极简精炼</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleRunAIAction('polish_casual');
+                        setShowPolishMenu(false);
+                      }}
+                      className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-gray-700 hover:text-emerald-600 transition flex items-center space-x-1.5"
+                    >
+                      <span>💬</span>
+                      <span>轻松口语</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleRunAIAction('polish_academic');
+                        setShowPolishMenu(false);
+                      }}
+                      className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-gray-700 hover:text-emerald-600 transition flex items-center space-x-1.5"
+                    >
+                      <span>🎓</span>
+                      <span>学术专业</span>
+                    </button>
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => handleRunAIAction('extract_tags')}
@@ -731,22 +847,82 @@ function EditorCore({
           </button>
 
           {/* 表格工具 */}
-          <div className="relative group/table ml-1">
+          <div className="relative ml-1" ref={tableMenuRef}>
             <button
-              className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-blue-500 flex items-center"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowTableMenu(!showTableMenu);
+              }}
+              className={`p-1.5 rounded flex items-center transition ${
+                showTableMenu
+                  ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-600 font-bold'
+                  : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-blue-500'
+              }`}
               title="表格工具"
             >
               <TableIcon className="w-3.5 h-3.5" />
               <ChevronDown className="w-2.5 h-2.5 ml-0.5" />
             </button>
-            <div className="absolute hidden group-hover/table:flex flex-col left-0 top-full mt-1 bg-white dark:bg-gray-800 shadow-xl border border-gray-100 dark:border-gray-700 rounded overflow-hidden z-50 w-32">
-              <button onClick={() => runEditorChain(chain => chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }))} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">插入 3x3 表格</button>
-              <button onClick={() => runEditorChain(chain => chain.addRowAfter())} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">下方添加行</button>
-              <button onClick={() => runEditorChain(chain => chain.deleteRow())} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">删除当前行</button>
-              <button onClick={() => runEditorChain(chain => chain.addColumnAfter())} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">右侧添加列</button>
-              <button onClick={() => runEditorChain(chain => chain.deleteColumn())} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">删除当前列</button>
-              <button onClick={() => runEditorChain(chain => chain.deleteTable())} className="px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-red-500">删除整个表格</button>
-            </div>
+            {showTableMenu && (
+              <div className="absolute flex flex-col left-0 top-full mt-1 bg-white dark:bg-gray-800 shadow-2xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden z-50 w-36 py-1 animate-fadeIn">
+                <button
+                  onClick={() => {
+                    runEditorChain(chain => chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }));
+                    setShowTableMenu(false);
+                  }}
+                  className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 transition flex items-center space-x-1.5 font-medium"
+                >
+                  <span>➕ 插入 3x3 表格</span>
+                </button>
+                <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
+                <button
+                  onClick={() => {
+                    runEditorChain(chain => chain.addRowAfter());
+                    setShowTableMenu(false);
+                  }}
+                  className="px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                >
+                  ⬇️ 下方添加行
+                </button>
+                <button
+                  onClick={() => {
+                    runEditorChain(chain => chain.deleteRow());
+                    setShowTableMenu(false);
+                  }}
+                  className="px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                >
+                  ➖ 删除当前行
+                </button>
+                <button
+                  onClick={() => {
+                    runEditorChain(chain => chain.addColumnAfter());
+                    setShowTableMenu(false);
+                  }}
+                  className="px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                >
+                  ➡️ 右侧添加列
+                </button>
+                <button
+                  onClick={() => {
+                    runEditorChain(chain => chain.deleteColumn());
+                    setShowTableMenu(false);
+                  }}
+                  className="px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                >
+                  ➖ 删除当前列
+                </button>
+                <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
+                <button
+                  onClick={() => {
+                    runEditorChain(chain => chain.deleteTable());
+                    setShowTableMenu(false);
+                  }}
+                  className="px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+                >
+                  🗑️ 删除整个表格
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
