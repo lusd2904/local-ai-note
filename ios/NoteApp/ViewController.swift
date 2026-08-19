@@ -17,32 +17,44 @@ class WeakScriptMessageDelegate: NSObject, WKScriptMessageHandler {
 }
 
 // 🌟 本地离线应用静态资源协议处理器 (app://localhost/...)
-// 彻底解决 iOS WKWebView 离线加载 ES Modules 与本地资源跨域问题，实现 100% 本地独立离线秒开
 class LocalAppSchemeHandler: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
         guard let url = urlSchemeTask.request.url else {
             urlSchemeTask.didFailWithError(NSError(domain: "LocalApp", code: 404, userInfo: nil))
             return
         }
-        var path = url.path
-        if path.isEmpty || path == "/" {
-            path = "/index.html"
+        
+        var cleanPath = url.path
+        while cleanPath.hasPrefix("/") {
+            cleanPath.removeFirst()
+        }
+        if cleanPath.isEmpty {
+            cleanPath = "index.html"
         }
         
         // 查找 Bundle 内部的 www 静态资源
-        var fileUrl = Bundle.main.bundleURL.appendingPathComponent("www").appendingPathComponent(path)
-        if !FileManager.default.fileExists(atPath: fileUrl.path) {
-            // 回退直接在 Bundle 根目录下寻找
-            fileUrl = Bundle.main.bundleURL.appendingPathComponent(path)
+        var fileUrl: URL? = nil
+        if let rUrl = Bundle.main.url(forResource: cleanPath, withExtension: nil, subdirectory: "www") {
+            fileUrl = rUrl
+        } else {
+            let u1 = Bundle.main.bundleURL.appendingPathComponent("www").appendingPathComponent(cleanPath)
+            if FileManager.default.fileExists(atPath: u1.path) {
+                fileUrl = u1
+            } else {
+                let u2 = Bundle.main.bundleURL.appendingPathComponent(cleanPath)
+                if FileManager.default.fileExists(atPath: u2.path) {
+                    fileUrl = u2
+                }
+            }
         }
         
-        guard let data = try? Data(contentsOf: fileUrl) else {
-            print("⚠️ Local file not found: \(fileUrl.path)")
+        guard let targetFile = fileUrl, let data = try? Data(contentsOf: targetFile) else {
+            print("⚠️ Local file not found: \(cleanPath)")
             urlSchemeTask.didFailWithError(NSError(domain: "LocalApp", code: 404, userInfo: nil))
             return
         }
         
-        let mimeType = mimeTypeFor(path: path)
+        let mimeType = mimeTypeFor(path: cleanPath)
         let response = HTTPURLResponse(
             url: url,
             statusCode: 200,
@@ -98,15 +110,40 @@ class ViewController: UIViewController, WKUIDelegate, WKNavigationDelegate, WKSc
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         
-        // 注册 app:// 自定义协议加载本地离线前端 (100% 独立离线)
+        // 允许本地跨域与资源读取
+        config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
+        config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
+        
+        // 注册 app:// 离线协议处理器
         config.setURLSchemeHandler(LocalAppSchemeHandler(), forURLScheme: "app")
         
         // 共享持久化存储与 IndexedDB
         config.websiteDataStore = WKWebsiteDataStore.default()
 
-        // 注册原生通信代理
+        // 注册原生通信代理与全局 JS 异常监听
         let contentController = WKUserContentController()
         contentController.add(WeakScriptMessageDelegate(delegate: self), name: "iosNativeSync")
+        
+        let errorLoggerJs = """
+        window.addEventListener('error', function(e) {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.iosNativeSync) {
+                window.webkit.messageHandlers.iosNativeSync.postMessage({
+                    action: 'log',
+                    message: 'JS ERROR: ' + e.message + ' at ' + e.filename + ':' + e.lineno
+                });
+            }
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.iosNativeSync) {
+                window.webkit.messageHandlers.iosNativeSync.postMessage({
+                    action: 'log',
+                    message: 'UNHANDLED REJECTION: ' + (e.reason ? (e.reason.stack || e.reason.message || e.reason) : 'unknown')
+                });
+            }
+        });
+        """
+        let userScript = WKUserScript(source: errorLoggerJs, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        contentController.addUserScript(userScript)
         config.userContentController = contentController
 
         webView = WKWebView(frame: view.bounds, configuration: config)
@@ -114,7 +151,7 @@ class ViewController: UIViewController, WKUIDelegate, WKNavigationDelegate, WKSc
         webView.uiDelegate = self
         webView.navigationDelegate = self
         webView.scrollView.bounces = false
-        webView.backgroundColor = UIColor(red: 15/255, green: 23/255, blue: 42/255, alpha: 1.0)
+        webView.backgroundColor = UIColor(red: 17/255, green: 24/255, blue: 39/255, alpha: 1.0) // 优雅深色底色
 
         if #available(iOS 11.0, *) {
             webView.scrollView.contentInsetAdjustmentBehavior = .never
@@ -124,9 +161,19 @@ class ViewController: UIViewController, WKUIDelegate, WKNavigationDelegate, WKSc
     }
 
     private func loadLocalApp() {
-        // 100% 本地独立离线加载
-        let appUrl = URL(string: "app://localhost/index.html")!
-        webView.load(URLRequest(url: appUrl))
+        // 优先使用 loadFileURL 直接读取本地 Bundle 中的 www/index.html (极速离线且零网络依赖)
+        if let localHtml = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "www") {
+            print("🚀 Loading local bundle html: \(localHtml.path)")
+            webView.loadFileURL(localHtml, allowingReadAccessTo: Bundle.main.bundleURL)
+        } else if let localHtmlRoot = Bundle.main.url(forResource: "index", withExtension: "html") {
+            print("🚀 Loading root bundle html: \(localHtmlRoot.path)")
+            webView.loadFileURL(localHtmlRoot, allowingReadAccessTo: Bundle.main.bundleURL)
+        } else {
+            // 回退到 app:// 协议
+            print("🚀 Loading via app:// scheme")
+            let appUrl = URL(string: "app://localhost/index.html")!
+            webView.load(URLRequest(url: appUrl))
+        }
     }
 
     private func requestPermissions() {
@@ -141,6 +188,8 @@ class ViewController: UIViewController, WKUIDelegate, WKNavigationDelegate, WKSc
                 if action == "haptic" {
                     let generator = UIImpactFeedbackGenerator(style: .medium)
                     generator.impactOccurred()
+                } else if action == "log", let msg = body["message"] as? String {
+                    print("📱 [iOS Web Log] \(msg)")
                 }
             }
         }
