@@ -36,9 +36,12 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
+    <!-- M6: 精细化 ATS 配置，仅对局域网 IP 放行 HTTP，其余强制 HTTPS -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>
+        <false/>
+        <key>NSAllowsLocalNetworking</key>
         <true/>
     </dict>
 </dict>

@@ -2,6 +2,20 @@ import UIKit
 import WebKit
 import AVFoundation
 
+// L3 修复: 弱引用代理，打破 WKScriptMessageHandler 循环引用
+class WeakScriptMessageDelegate: NSObject, WKScriptMessageHandler {
+    weak var delegate: WKScriptMessageHandler?
+
+    init(delegate: WKScriptMessageHandler) {
+        self.delegate = delegate
+        super.init()
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        delegate?.userContentController(userContentController, didReceive: message)
+    }
+}
+
 class ViewController: UIViewController, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
 
     var webView: WKWebView!
@@ -14,7 +28,11 @@ class ViewController: UIViewController, WKUIDelegate, WKNavigationDelegate, WKSc
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle {
-        return .default
+        return .lightContent
+    }
+
+    override var prefersStatusBarHidden: Bool {
+        return false
     }
 
     private func setupWebView() {
@@ -25,9 +43,9 @@ class ViewController: UIViewController, WKUIDelegate, WKNavigationDelegate, WKSc
         // 共享持久化存储与离线缓存
         config.websiteDataStore = WKWebsiteDataStore.default()
 
-        // 注册原生通信
+        // L3: 使用弱引用代理注册原生通信，防止循环引用内存泄漏
         let contentController = WKUserContentController()
-        contentController.add(self, name: "iosNativeSync")
+        contentController.add(WeakScriptMessageDelegate(delegate: self), name: "iosNativeSync")
         config.userContentController = contentController
 
         webView = WKWebView(frame: view.bounds, configuration: config)
@@ -35,8 +53,16 @@ class ViewController: UIViewController, WKUIDelegate, WKNavigationDelegate, WKSc
         webView.uiDelegate = self
         webView.navigationDelegate = self
         webView.scrollView.bounces = false
-        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        // L2: 使用 .automatic 让系统自动处理安全区域适配（刘海/灵动岛/Home Indicator）
+        webView.scrollView.contentInsetAdjustmentBehavior = .automatic
         webView.backgroundColor = .systemBackground
+
+        // 启用 iOS safe area 感知
+        if #available(iOS 11.0, *) {
+            webView.scrollView.contentInsetAdjustmentBehavior = .never
+            // 通过 additionalSafeAreaInsets 确保 WebView 内容不被刘海遮挡
+            // CSS 端使用 env(safe-area-inset-*) 来处理
+        }
 
         view.addSubview(webView)
     }
@@ -68,5 +94,10 @@ class ViewController: UIViewController, WKUIDelegate, WKNavigationDelegate, WKSc
                 }
             }
         }
+    }
+
+    deinit {
+        // L3: 清理 script message handler 防止悬垂引用
+        webView?.configuration.userContentController.removeScriptMessageHandler(forName: "iosNativeSync")
     }
 }

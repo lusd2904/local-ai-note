@@ -78,16 +78,26 @@ export class SyncService {
 
     const cleanUrl = serverUrl.replace(/\/+$/, '');
 
-    // 1. 获取本地自上次同步以来变动的全量笔记和笔记本
-    const localNotes = await localDb.getNotes({ is_trashed: undefined });
+    // M2: 仅获取自上次同步以来变动的增量数据（而非全量），减少传输量
+    // C4: 使用 includeAll=true 确保废纸篓中的笔记也参与同步
+    const allLocalNotes = await localDb.getNotes({ includeAll: true });
     const localNotebooks = await localDb.getNotebooks();
+
+    // M2: 如果有上次同步时间，只推送有更新的记录
+    let notesToPush = allLocalNotes;
+    let notebooksToPush = localNotebooks;
+    if (lastSyncTime) {
+      const lastSyncDate = new Date(lastSyncTime);
+      notesToPush = allLocalNotes.filter(n => new Date(n.updated_at) > lastSyncDate);
+      notebooksToPush = localNotebooks.filter(nb => new Date(nb.updated_at) > lastSyncDate);
+    }
 
     // 2. 发起双向原子同步请求
     const payload = {
       last_sync_time: lastSyncTime || null,
       token: token,
-      notebooks: localNotebooks,
-      notes: localNotes,
+      notebooks: notebooksToPush,
+      notes: notesToPush,
       audio_records: [],
       deleted_note_ids: [],
       deleted_notebook_ids: []

@@ -71,8 +71,12 @@ class LocalDatabase {
     return tx.objectStore(storeName);
   }
 
-  // 生成标准 UUID
+  // L5: 使用密码学安全的 UUID 生成
   generateUUID() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    // 降级方案
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
@@ -80,18 +84,24 @@ class LocalDatabase {
   }
 
   // ----------------- 笔记 (Notes) CRUD -----------------
+
+  // C4 修复: 新增 includeAll 参数支持同步时获取全量数据（含废纸篓）
   async getNotes(options = {}) {
     const store = await this.getStore('notes', 'readonly');
     return new Promise((resolve, reject) => {
       const request = store.getAll();
       request.onsuccess = () => {
         let notes = request.result || [];
-        // 过滤废纸篓
-        if (options.is_trashed !== undefined) {
-          notes = notes.filter(n => Boolean(n.is_trashed) === Boolean(options.is_trashed));
-        } else {
-          notes = notes.filter(n => !n.is_trashed);
+
+        // C4: 如果 includeAll=true，跳过废纸篓过滤（同步场景需要）
+        if (!options.includeAll) {
+          if (options.is_trashed === true) {
+            notes = notes.filter(n => Boolean(n.is_trashed));
+          } else if (options.is_trashed === false || options.is_trashed === undefined) {
+            notes = notes.filter(n => !n.is_trashed);
+          }
         }
+
         // 过滤收藏
         if (options.is_starred) {
           notes = notes.filter(n => Boolean(n.is_starred));
@@ -218,8 +228,12 @@ class LocalDatabase {
     });
   }
 
+  // C6 修复: updateNotebook 确保 get 和 put 在同一事务中
   async updateNotebook(id, updates) {
-    const store = await this.getStore('notebooks', 'readwrite');
+    await this.initPromise;
+    const tx = this.db.transaction('notebooks', 'readwrite');
+    const store = tx.objectStore('notebooks');
+
     return new Promise((resolve, reject) => {
       const getReq = store.get(id);
       getReq.onsuccess = () => {
@@ -235,6 +249,8 @@ class LocalDatabase {
         putReq.onerror = reject;
       };
       getReq.onerror = reject;
+
+      tx.onerror = () => reject(new Error('事务执行失败'));
     });
   }
 
@@ -266,31 +282,53 @@ class LocalDatabase {
     });
   }
 
-  // 批量更新拉取下来的数据
+  // C5 修复: 批量同步数据使用单个多 store 原子事务
   async bulkApplySyncData(serverData) {
+    await this.initPromise;
     const { server_notebooks = [], server_notes = [], server_audio_records = [] } = serverData;
-    
-    // 1. 合并笔记本
-    if (server_notebooks.length > 0) {
-      const nbStore = await this.getStore('notebooks', 'readwrite');
-      for (const nb of server_notebooks) {
-        nbStore.put(nb);
+
+    // C5: 所有 objectStore 在同一个事务中操作，保证原子性
+    const storeNames = [];
+    if (server_notebooks.length > 0) storeNames.push('notebooks');
+    if (server_notes.length > 0) storeNames.push('notes');
+    if (storeNames.length === 0) {
+      // 无数据需要合并，只更新同步时间
+      if (serverData.sync_timestamp) {
+        await this.setSyncMeta('last_sync_time', serverData.sync_timestamp);
       }
+      return true;
     }
 
-    // 2. 合并笔记
-    if (server_notes.length > 0) {
-      const noteStore = await this.getStore('notes', 'readwrite');
-      for (const note of server_notes) {
-        noteStore.put(note);
-      }
-    }
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction(storeNames, 'readwrite');
 
-    // 3. 记录最新同步时间
-    if (serverData.sync_timestamp) {
-      await this.setSyncMeta('last_sync_time', serverData.sync_timestamp);
-    }
-    return true;
+      // 合并笔记本
+      if (server_notebooks.length > 0) {
+        const nbStore = tx.objectStore('notebooks');
+        for (const nb of server_notebooks) {
+          nbStore.put(nb);
+        }
+      }
+
+      // 合并笔记
+      if (server_notes.length > 0) {
+        const noteStore = tx.objectStore('notes');
+        for (const note of server_notes) {
+          noteStore.put(note);
+        }
+      }
+
+      tx.oncomplete = async () => {
+        // 事务成功提交后再记录同步时间
+        if (serverData.sync_timestamp) {
+          await this.setSyncMeta('last_sync_time', serverData.sync_timestamp);
+        }
+        resolve(true);
+      };
+
+      tx.onerror = () => reject(new Error('批量同步数据事务失败'));
+      tx.onabort = () => reject(new Error('批量同步数据事务被中止'));
+    });
   }
 }
 

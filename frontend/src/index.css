@@ -89,3 +89,78 @@
 .markdown-body input[type="checkbox"] {
   @apply mr-2 accent-blue-600 rounded;
 }
+
+/* ─── M5: iOS 移动端响应式适配 ─── */
+
+/* iOS Safe Area 全局安全区域处理 */
+html {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* 移动端 (< 768px): 侧边栏折叠隐藏 */
+@media (max-width: 767px) {
+  /* 隐藏侧边栏，通过 JS 控制显示 */
+  aside {
+    position: fixed !important;
+    left: -100% !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    z-index: 40 !important;
+    width: 280px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
+    transition: left 0.3s ease-in-out !important;
+    box-shadow: none !important;
+  }
+
+  aside.mobile-sidebar-open {
+    left: 0 !important;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  /* 移动端遮罩层 */
+  .mobile-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 39;
+    backdrop-filter: blur(2px);
+  }
+
+  /* 笔记列表在移动端全宽 */
+  .note-list-panel {
+    min-width: 100% !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* 编辑器在移动端全宽全屏 */
+  .editor-panel {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 30 !important;
+    width: 100% !important;
+  }
+
+  /* 编辑器工具栏按钮触控友好 */
+  .editor-toolbar button {
+    min-width: 36px !important;
+    min-height: 36px !important;
+    padding: 8px !important;
+  }
+
+  /* 底部安全区域留白（Home Indicator） */
+  .bottom-bar {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* 淡入动画 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+

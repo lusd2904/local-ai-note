@@ -162,8 +162,6 @@ class SyncPairOut(BaseModel):
     server_name: str
     server_time: datetime
 
-class SyncItemDict(BaseModel):
-    pass
 
 class SyncPullRequest(BaseModel):
     last_sync_time: Optional[datetime] = None
