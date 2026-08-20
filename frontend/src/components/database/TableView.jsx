@@ -30,6 +30,18 @@ export default function TableView({
   const [activeHeaderDropdown, setActiveHeaderDropdown] = useState(null); // colId
   const [hoveredRowId, setHoveredRowId] = useState(null);
 
+  // 全局点击外部区域自动收起所有单元格和表头下拉菜单
+  React.useEffect(() => {
+    const handleGlobalClick = (e) => {
+      if (!e.target.closest('.db-dropdown-box') && !e.target.closest('.db-dropdown-trigger')) {
+        setActiveCellDropdown(null);
+        setActiveHeaderDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleGlobalClick);
+    return () => document.removeEventListener('mousedown', handleGlobalClick);
+  }, []);
+
   const titleCol = database.schema.find(c => c.type === 'title') || database.schema[0];
 
   const handleCellChange = (rowId, colId, value) => {
@@ -136,6 +148,7 @@ export default function TableView({
         <tbody>
           {rows.map((row, index) => {
             const isHovered = hoveredRowId === row.id;
+            const isNearBottom = index >= rows.length - 2 && rows.length > 2;
 
             return (
               <tr
@@ -199,7 +212,7 @@ export default function TableView({
                                 ? null
                                 : { rowId: row.id, colId: col.id }
                             )}
-                            className={`px-2 py-0.5 rounded text-[11px] font-medium border flex items-center space-x-1 transition ${
+                            className={`db-dropdown-trigger px-2 py-0.5 rounded text-[11px] font-medium border flex items-center space-x-1 transition ${
                               STATUS_COLORS[col.options?.find(o => o.id === val)?.color || 'gray']
                             }`}
                           >
@@ -208,7 +221,7 @@ export default function TableView({
                           </button>
 
                           {activeCellDropdown?.rowId === row.id && activeCellDropdown?.colId === col.id && (
-                            <div className="absolute top-full left-0 mt-1 w-36 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-30 animate-fadeIn">
+                            <div className={`db-dropdown-box absolute ${isNearBottom ? 'bottom-full mb-1.5' : 'top-full mt-1'} left-0 w-36 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 py-1 z-50 animate-fadeIn`}>
                               {col.options?.map(opt => (
                                 <button
                                   key={opt.id}
@@ -238,7 +251,7 @@ export default function TableView({
                                 ? null
                                 : { rowId: row.id, colId: col.id }
                             )}
-                            className={`px-2 py-0.5 rounded text-[11px] font-medium border flex items-center space-x-1 transition ${
+                            className={`db-dropdown-trigger px-2 py-0.5 rounded text-[11px] font-medium border flex items-center space-x-1 transition ${
                               STATUS_COLORS[col.options?.find(o => o.id === val)?.color || 'gray']
                             }`}
                           >
@@ -247,7 +260,7 @@ export default function TableView({
                           </button>
 
                           {activeCellDropdown?.rowId === row.id && activeCellDropdown?.colId === col.id && (
-                            <div className="absolute top-full left-0 mt-1 w-36 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-30 animate-fadeIn">
+                            <div className={`db-dropdown-box absolute ${isNearBottom ? 'bottom-full mb-1.5' : 'top-full mt-1'} left-0 w-36 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 py-1 z-50 animate-fadeIn`}>
                               {col.options?.map(opt => (
                                 <button
                                   key={opt.id}
@@ -291,13 +304,13 @@ export default function TableView({
                                 ? null
                                 : { rowId: row.id, colId: col.id }
                             )}
-                            className="p-0.5 text-gray-400 hover:text-gray-600 rounded transition"
+                            className="db-dropdown-trigger p-0.5 text-gray-400 hover:text-gray-600 rounded transition"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
 
                           {activeCellDropdown?.rowId === row.id && activeCellDropdown?.colId === col.id && (
-                            <div className="absolute top-full left-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-30 animate-fadeIn">
+                            <div className={`db-dropdown-box absolute ${isNearBottom ? 'bottom-full mb-1.5' : 'top-full mt-1'} left-0 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 py-1 z-50 animate-fadeIn`}>
                               {col.options?.map(opt => {
                                 const isSelected = (val || []).includes(opt.id);
                                 return (

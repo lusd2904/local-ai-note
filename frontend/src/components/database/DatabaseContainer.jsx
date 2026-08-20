@@ -30,6 +30,17 @@ export default function DatabaseContainer({
   const [newColName, setNewColName] = useState('');
   const [newColType, setNewColType] = useState('text'); // text, select, status, date, number, checkbox
 
+  // 全局点击外部区域自动收起图标选择器
+  useEffect(() => {
+    const handleGlobalClick = (e) => {
+      if (!e.target.closest('.icon-picker-box') && !e.target.closest('.icon-picker-trigger')) {
+        setIsIconPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleGlobalClick);
+    return () => document.removeEventListener('mousedown', handleGlobalClick);
+  }, []);
+
   useEffect(() => {
     if (databaseId) {
       fetchDatabase();
@@ -186,14 +197,14 @@ export default function DatabaseContainer({
             <div className="relative">
               <button
                 onClick={() => setIsIconPickerOpen(!isIconPickerOpen)}
-                className="text-3xl p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition cursor-pointer"
+                className="icon-picker-trigger text-3xl p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition cursor-pointer select-none"
                 title="更换图标"
               >
                 {database.icon || '📊'}
               </button>
 
               {isIconPickerOpen && (
-                <div className="absolute top-full left-0 mt-2 p-2 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 grid grid-cols-5 gap-1.5 z-40 animate-fadeIn">
+                <div className="icon-picker-box absolute top-full left-0 mt-2 p-2 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 grid grid-cols-5 gap-1.5 z-50 animate-fadeIn min-w-[190px]">
                   {ICONS.map(emoji => (
                     <button
                       key={emoji}
@@ -201,7 +212,7 @@ export default function DatabaseContainer({
                         handleUpdateDatabaseMeta({ icon: emoji });
                         setIsIconPickerOpen(false);
                       }}
-                      className="text-xl p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                      className="text-xl p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition text-center"
                     >
                       {emoji}
                     </button>

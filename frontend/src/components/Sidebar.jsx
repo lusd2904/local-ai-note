@@ -524,7 +524,9 @@ export default function Sidebar({
                   >
                     <div className="flex items-center space-x-2 truncate">
                       <span className="text-sm shrink-0">{db.icon || '📊'}</span>
-                      <span className="truncate">{db.title}</span>
+                      <span className="truncate">
+                        {db.title && db.icon && db.title.startsWith(db.icon) ? db.title.replace(db.icon, '').trim() : (db.title || '未命名数据表')}
+                      </span>
                     </div>
                     {db.rows && db.rows.length > 0 && (
                       <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500 font-mono shrink-0">
