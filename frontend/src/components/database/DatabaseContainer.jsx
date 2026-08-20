@@ -80,10 +80,10 @@ export default function DatabaseContainer({
         }
       };
       const newRow = await createDatabaseRow(database.id, payload);
-      setDatabase({
-        ...database,
-        rows: [...(database.rows || []), newRow]
-      });
+      setDatabase(prev => ({
+        ...prev,
+        rows: [...(prev.rows || []), newRow]
+      }));
     } catch (err) {
       alert('新建记录失败: ' + err.message);
     }
@@ -93,10 +93,10 @@ export default function DatabaseContainer({
     if (!database) return;
     try {
       const updatedRow = await updateDatabaseRow(database.id, rowId, updates);
-      setDatabase({
-        ...database,
-        rows: (database.rows || []).map(r => r.id === rowId ? updatedRow : r)
-      });
+      setDatabase(prev => ({
+        ...prev,
+        rows: (prev.rows || []).map(r => r.id === rowId ? updatedRow : r)
+      }));
       if (selectedRow?.id === rowId) {
         setSelectedRow(updatedRow);
       }
@@ -109,10 +109,10 @@ export default function DatabaseContainer({
     if (!database) return;
     try {
       await deleteDatabaseRow(database.id, rowId);
-      setDatabase({
-        ...database,
-        rows: (database.rows || []).filter(r => r.id !== rowId)
-      });
+      setDatabase(prev => ({
+        ...prev,
+        rows: (prev.rows || []).filter(r => r.id !== rowId)
+      }));
       if (selectedRow?.id === rowId) {
         setSelectedRow(null);
       }
@@ -138,9 +138,10 @@ export default function DatabaseContainer({
         { id: 'done', name: '已完成', color: 'green' }
       ];
     } else if (newColType === 'select' || newColType === 'multi_select') {
+      const nowBase = Date.now().toString(36);
       options = [
-        { id: 'opt_1', name: '选项一', color: 'purple' },
-        { id: 'opt_2', name: '选项二', color: 'amber' }
+        { id: `opt_${nowBase}_1`, name: '选项一', color: 'purple' },
+        { id: `opt_${nowBase}_2`, name: '选项二', color: 'amber' }
       ];
     }
 
@@ -341,6 +342,7 @@ export default function DatabaseContainer({
             onDeleteRow={handleDeleteRow}
             onCreateRow={(initialProps) => handleCreateRow(initialProps)}
             onOpenRowDetail={(row) => setSelectedRow(row)}
+            onUpdateSchema={handleUpdateSchema}
           />
         )}
       </div>

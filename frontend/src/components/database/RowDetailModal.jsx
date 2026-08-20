@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, Maximize2, Minimize2, Trash2, Calendar, 
   Tag, CheckSquare, Hash, AlignLeft, Layers, 
-  Sparkles, Check, Clock, ChevronDown, Plus
+  Check, Clock, ChevronDown, Plus
 } from 'lucide-react';
 import TagOptionSelector, { STATUS_COLORS } from './TagOptionSelector';
 
@@ -15,17 +15,19 @@ export default function RowDetailModal({
   onDeleteRow,
   onUpdateSchema
 }) {
-  if (!isOpen || !row) return null;
-
-  const [properties, setProperties] = useState(row.properties || {});
-  const [content, setContent] = useState(row.content || '');
+  const [properties, setProperties] = useState(row?.properties || {});
+  const [content, setContent] = useState(row?.content || '');
   const [isFullWidth, setIsFullWidth] = useState(false);
   const [openDropdownCol, setOpenDropdownCol] = useState(null);
 
   useEffect(() => {
-    setProperties(row.properties || {});
-    setContent(row.content || '');
+    if (row) {
+      setProperties(row.properties || {});
+      setContent(row.content || '');
+    }
   }, [row]);
+
+  if (!isOpen || !row) return null;
 
   const titleCol = database.schema.find(c => c.type === 'title') || database.schema[0];
   const titleVal = properties[titleCol?.id] || '无标题记录';

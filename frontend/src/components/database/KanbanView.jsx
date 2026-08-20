@@ -3,17 +3,7 @@ import {
   Plus, MoreHorizontal, Calendar, Tag, 
   Layers, Hash, ArrowRight, Maximize2, Trash2
 } from 'lucide-react';
-
-const STATUS_COLORS = {
-  gray: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700',
-  blue: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700',
-  green: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700',
-  red: 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-700',
-  amber: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700',
-  purple: 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700',
-  pink: 'bg-pink-100 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300 border-pink-300 dark:border-pink-700',
-  slate: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700',
-};
+import { STATUS_COLORS } from './TagOptionSelector';
 
 export default function KanbanView({
   database,
@@ -21,7 +11,8 @@ export default function KanbanView({
   onUpdateRow,
   onDeleteRow,
   onCreateRow,
-  onOpenRowDetail
+  onOpenRowDetail,
+  onUpdateSchema
 }) {
   const [quickTitle, setQuickTitle] = useState({}); // { [statusId]: string }
   const [draggedRowId, setDraggedRowId] = useState(null);
@@ -127,9 +118,11 @@ export default function KanbanView({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onDeleteRow(row.id);
+                          if (window.confirm(`确定要删除记录「${titleVal}」吗？`)) {
+                            onDeleteRow(row.id);
+                          }
                         }}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 rounded transition"
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 rounded transition cursor-pointer"
                         title="删除卡片"
                       >
                         <Trash2 className="w-3 h-3" />

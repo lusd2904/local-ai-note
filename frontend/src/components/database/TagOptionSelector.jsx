@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Check, Trash2, Palette, Edit2, Search, X } from 'lucide-react';
+import { Plus, Check, Trash2, Palette, Edit2, Search } from 'lucide-react';
 
 export const STATUS_COLORS = {
   gray: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700',
@@ -263,7 +263,7 @@ export default function TagOptionSelector({
                     </button>
 
                     {colorPickerOptId === opt.id && (
-                      <div className="absolute right-0 top-full mt-1 p-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 grid grid-cols-4 gap-1 z-60 w-24">
+                      <div className="absolute right-0 top-full mt-1 p-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 grid grid-cols-4 gap-1 z-[60] w-24">
                         {COLOR_LIST.map((c) => (
                           <button
                             key={c}

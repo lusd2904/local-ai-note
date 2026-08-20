@@ -1,10 +1,65 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Plus, MoreHorizontal, ChevronDown, Check, X, 
-  Trash2, ArrowUpDown, Maximize2, Calendar, Tag, 
-  Layers, Hash, CheckSquare, AlignLeft, ArrowUp, ArrowDown
+  Plus, ChevronDown, 
+  Trash2, Maximize2, Calendar, Tag, 
+  Layers, Hash, CheckSquare, AlignLeft
 } from 'lucide-react';
 import TagOptionSelector, { STATUS_COLORS } from './TagOptionSelector';
+
+function TableTextInput({ value, onSave, placeholder, className }) {
+  const [localVal, setLocalVal] = useState(value || '');
+  useEffect(() => {
+    setLocalVal(value || '');
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      value={localVal}
+      onChange={(e) => setLocalVal(e.target.value)}
+      onBlur={() => {
+        if (localVal !== (value || '')) {
+          onSave(localVal);
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.target.blur();
+        }
+      }}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
+
+function TableNumberInput({ value, onSave, placeholder, className }) {
+  const [localVal, setLocalVal] = useState(value ?? '');
+  useEffect(() => {
+    setLocalVal(value ?? '');
+  }, [value]);
+
+  return (
+    <input
+      type="number"
+      value={localVal}
+      onChange={(e) => setLocalVal(e.target.value)}
+      onBlur={() => {
+        const numVal = localVal === '' ? null : Number(localVal);
+        if (numVal !== (value ?? null)) {
+          onSave(numVal);
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.target.blur();
+        }
+      }}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
 
 
 export default function TableView({
@@ -21,6 +76,9 @@ export default function TableView({
   const [activeHeaderDropdown, setActiveHeaderDropdown] = useState(null); // colId
   const [hoveredRowId, setHoveredRowId] = useState(null);
 
+  // debounce 定时器引用
+  const debounceTimerRef = useRef(null);
+
   // 全局点击外部区域自动收起所有单元格和表头下拉菜单
   React.useEffect(() => {
     const handleGlobalClick = (e) => {
@@ -35,12 +93,24 @@ export default function TableView({
 
   const titleCol = database.schema.find(c => c.type === 'title') || database.schema[0];
 
+  // 立即提交（用于 select、checkbox、date 等非连续输入类型）
   const handleCellChange = (rowId, colId, value) => {
     const targetRow = rows.find(r => r.id === rowId);
     if (!targetRow) return;
     const nextProps = { ...targetRow.properties, [colId]: value };
     onUpdateRow(rowId, { properties: nextProps });
   };
+
+  // 带 debounce 的提交（用于 text、number 等连续输入类型）
+  const handleCellChangeDebounced = useCallback((rowId, colId, value) => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      const targetRow = rows.find(r => r.id === rowId);
+      if (!targetRow) return;
+      const nextProps = { ...targetRow.properties, [colId]: value };
+      onUpdateRow(rowId, { properties: nextProps });
+    }, 400);
+  }, [rows, onUpdateRow]);
 
   const getColIcon = (type) => {
     switch (type) {
@@ -81,7 +151,7 @@ export default function TableView({
                   {col.type !== 'title' && (
                     <button
                       onClick={() => setActiveHeaderDropdown(activeHeaderDropdown === col.id ? null : col.id)}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded transition"
+                      className="db-dropdown-trigger opacity-0 group-hover:opacity-100 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded transition"
                     >
                       <ChevronDown className="w-3 h-3" />
                     </button>
@@ -90,7 +160,7 @@ export default function TableView({
 
                 {/* 表头下拉操作菜单 */}
                 {activeHeaderDropdown === col.id && (
-                  <div className="absolute top-full left-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-30 font-normal animate-fadeIn">
+                  <div className="db-dropdown-box absolute top-full left-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-30 font-normal animate-fadeIn">
                     <button
                       onClick={() => {
                         const newName = window.prompt('请输入新的列名:', col.name);
@@ -177,10 +247,9 @@ export default function TableView({
                       {/* 1. 标题 (Title) */}
                       {isTitle && (
                         <div className="flex items-center justify-between group/cell">
-                          <input
-                            type="text"
+                          <TableTextInput
                             value={val || ''}
-                            onChange={(e) => handleCellChange(row.id, col.id, e.target.value)}
+                            onSave={(newVal) => handleCellChange(row.id, col.id, newVal)}
                             placeholder="未命名"
                             className="w-full bg-transparent font-medium text-gray-800 dark:text-gray-200 outline-hidden focus:bg-white dark:focus:bg-gray-800 focus:ring-1 focus:ring-blue-500 rounded px-1 -mx-1"
                           />
@@ -316,10 +385,9 @@ export default function TableView({
                       {/* 6. 数字 / 进度 (Number) */}
                       {col.type === 'number' && (
                         <div className="flex items-center space-x-1.5">
-                          <input
-                            type="number"
-                            value={val ?? ''}
-                            onChange={(e) => handleCellChange(row.id, col.id, e.target.value === '' ? null : Number(e.target.value))}
+                          <TableNumberInput
+                            value={val}
+                            onSave={(newVal) => handleCellChange(row.id, col.id, newVal)}
                             placeholder="0"
                             className="w-14 bg-transparent font-mono text-gray-800 dark:text-gray-200 outline-hidden focus:bg-white dark:focus:bg-gray-800 focus:ring-1 focus:ring-blue-500 rounded px-1"
                           />
@@ -346,10 +414,9 @@ export default function TableView({
 
                       {/* 8. 普通文本 (Text) */}
                       {col.type === 'text' && (
-                        <input
-                          type="text"
+                        <TableTextInput
                           value={val || ''}
-                          onChange={(e) => handleCellChange(row.id, col.id, e.target.value)}
+                          onSave={(newVal) => handleCellChange(row.id, col.id, newVal)}
                           placeholder="空"
                           className="w-full bg-transparent text-gray-700 dark:text-gray-300 outline-hidden focus:bg-white dark:focus:bg-gray-800 focus:ring-1 focus:ring-blue-500 rounded px-1 -mx-1"
                         />

@@ -60,7 +60,7 @@ DEFAULT_SCHEMA = [
         "width": 150,
         "options": [
             {"id": "frontend", "name": "前端", "color": "purple"},
-            {"id": "backend", "name": "后端", "color": "emerald"},
+            {"id": "backend", "name": "后端", "color": "green"},
             {"id": "design", "name": "设计", "color": "pink"}
         ]
     },
@@ -305,7 +305,7 @@ def create_database_row(
         properties_json=json.dumps(row_in.properties or {}, ensure_ascii=False),
         content=row_in.content or "",
         content_json=row_in.content_json or "",
-        order_index=row_in.order_index if row_in.order_index else next_order
+        order_index=row_in.order_index if row_in.order_index is not None else next_order
     )
     db.add(new_row)
     db.commit()
