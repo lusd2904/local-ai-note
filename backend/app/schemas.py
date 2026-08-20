@@ -312,7 +312,7 @@ class DatabaseRowBase(BaseModel):
     properties: Dict[str, Any] = {}
     content: Optional[str] = ""
     content_json: Optional[str] = ""
-    order_index: Optional[float] = 0.0
+    order_index: Optional[float] = None
 
 class DatabaseRowCreate(DatabaseRowBase):
     pass
