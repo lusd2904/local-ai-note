@@ -196,6 +196,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
         completionHandler()
     }
 
+    // 🌟 原生 Prompt 支持 (解决 window.prompt 在 macOS WKWebView 中无反应)
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+        let alert = NSAlert()
+        alert.messageText = "请输入"
+        alert.informativeText = prompt
+        alert.addButton(withTitle: "确定")
+        alert.addButton(withTitle: "取消")
+
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        input.stringValue = defaultText ?? ""
+        alert.accessoryView = input
+
+        let result = alert.runModal()
+        if result == .alertFirstButtonReturn {
+            completionHandler(input.stringValue)
+        } else {
+            completionHandler(nil)
+        }
+    }
+
     // 🌟 登录授权弹窗：支持微信扫码、手机验证码等 OAuth 登录弹窗无缝完成授权并共享 Cookie
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         configuration.websiteDataStore = WKWebsiteDataStore.default()

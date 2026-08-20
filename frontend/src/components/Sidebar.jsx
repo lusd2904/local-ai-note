@@ -227,6 +227,12 @@ export default function Sidebar({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalParentId, setModalParentId] = useState('');
   const [modalName, setModalName] = useState('');
+  
+  // 🌟 新建多维数据表弹窗状态
+  const [isCreateDbModalOpen, setIsCreateDbModalOpen] = useState(false);
+  const [dbModalTitle, setDbModalTitle] = useState('');
+  const [dbModalIcon, setDbModalIcon] = useState('📊');
+
   const [notebooksExpanded, setNotebooksExpanded] = useState(true);
   const [databasesExpanded, setDatabasesExpanded] = useState(true);
   const [aiSectionExpanded, setAiSectionExpanded] = useState(true);
@@ -250,6 +256,15 @@ export default function Sidebar({
     onCreateNotebook(modalName.trim(), modalParentId ? modalParentId : null);
     setIsModalOpen(false);
     setModalName('');
+  };
+
+  const handleCreateDbSubmit = (e) => {
+    e.preventDefault();
+    const title = dbModalTitle.trim() || '新数据表';
+    onCreateDatabase(title, dbModalIcon || '📊');
+    setIsCreateDbModalOpen(false);
+    setDbModalTitle('');
+    setDbModalIcon('📊');
   };
 
   return (
@@ -490,13 +505,12 @@ export default function Sidebar({
             
             <button
               onClick={() => {
-                const name = window.prompt('请输入新数据表名称:', '新数据表');
-                if (name && name.trim()) {
-                  onCreateDatabase(name.trim());
-                }
+                setDbModalTitle('');
+                setDbModalIcon('📊');
+                setIsCreateDbModalOpen(true);
               }}
               style={{ WebkitAppRegion: 'no-drag' }}
-              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition text-blue-500 hover:text-blue-600 flex items-center space-x-0.5"
+              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition text-blue-500 hover:text-blue-600 flex items-center space-x-0.5 cursor-pointer"
               title="新建多维数据表"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -646,6 +660,79 @@ export default function Sidebar({
                   className="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg shadow-sm transition"
                 >
                   确认创建
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🌟 新建多维数据表弹窗 (替换 window.prompt，支持图标选择与名称输入) */}
+      {isCreateDbModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <Table className="w-4 h-4 text-blue-500" />
+                <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100">新建多维数据表</h3>
+              </div>
+              <button onClick={() => setIsCreateDbModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateDbSubmit} className="space-y-3.5 text-xs">
+              {/* 选择图标 */}
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 mb-1.5 font-medium">
+                  选择数据表图标
+                </label>
+                <div className="grid grid-cols-5 gap-1.5 p-2 bg-gray-50 dark:bg-gray-800/60 rounded-xl border border-gray-100 dark:border-gray-800">
+                  {['📊', '🚀', '🎯', '📚', '💼', '💡', '📝', '📅', '🏷️', '🌟', '⚙️', '🎨', '📈', '🧪', '📦'].map(emoji => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => setDbModalIcon(emoji)}
+                      className={`text-xl p-1 rounded-lg transition text-center ${
+                        dbModalIcon === emoji 
+                          ? 'bg-blue-500 text-white shadow-xs scale-105' 
+                          : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 数据表名称 */}
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 mb-1 font-medium">
+                  数据表名称
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="例如: 产品需求看板 / OKR 目标管理..."
+                  value={dbModalTitle}
+                  onChange={(e) => setDbModalTitle(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-800 dark:text-gray-200 focus:border-blue-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateDbModalOpen(false)}
+                  className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg shadow-xs transition cursor-pointer"
+                >
+                  立即创建
                 </button>
               </div>
             </form>

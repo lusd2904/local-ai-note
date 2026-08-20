@@ -71,9 +71,9 @@ export default function App() {
     }
   };
 
-  const handleCreateDatabase = async (title = '新数据表') => {
+  const handleCreateDatabase = async (title = '新数据表', icon = '📊') => {
     try {
-      const newDb = await createDatabase({ title });
+      const newDb = await createDatabase({ title, icon });
       await fetchDatabases();
       setCurrentDatabaseId(newDb.id);
       setCurrentView('database');
