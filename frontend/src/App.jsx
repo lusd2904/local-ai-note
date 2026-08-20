@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import NoteList from './components/NoteList';
 import Editor from './components/Editor';
@@ -14,14 +14,17 @@ import DatabaseContainer from './components/database/DatabaseContainer';
 import ErrorBoundary from './components/ErrorBoundary';
 import AIConsultationView from './components/AIConsultationView';
 import EmbeddedWebAIView from './components/EmbeddedWebAIView';
+import CommandPalette from './components/CommandPalette';
 import { 
   getNotebooks, createNotebook, updateNotebook, deleteNotebook,
-  getNotes, getNote, createNote, updateNote, deleteNote, restoreNote, emptyTrash,
-  getAudioRecords, analyzeContent, lockNote, unlockNote, verifyNotePassword,
+  getNotes, getNote, getNoteStats, createNote, updateNote, deleteNote, restoreNote, emptyTrash,
+  getAudioRecords, lockNote, unlockNote, verifyNotePassword,
   cloneNote, batchImportNotes, getMemos,
   getDatabases, createDatabase, deleteDatabase, restoreDatabase
 } from './api/client';
 import { localDb } from './services/localDb';
+import { loadPref, savePref } from './utils/persist';
+import { requestNotifyPermission } from './utils/notify';
 
 export default function App() {
   // 核心数据状态
@@ -34,10 +37,15 @@ export default function App() {
   const [audioRecords, setAudioRecords] = useState([]);
 
   // 视图与导航状态
-  const [currentView, setCurrentView] = useState('all'); // 'all', 'starred', 'trash', 'audio_studio', 'notebook', 'memos', 'database'
-  const [currentNotebookId, setCurrentNotebookId] = useState(null);
+  const [currentView, setCurrentView] = useState(() => loadPref('currentView', 'all'));
+  const [currentNotebookId, setCurrentNotebookId] = useState(() => loadPref('currentNotebookId', null));
+  const [searchInput, setSearchInput] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => loadPref('darkMode', false));
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => loadPref('sidebarCollapsed', false));
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const restoreNoteIdRef = useRef(loadPref('lastNoteId', null));
+  const didRestoreRef = useRef(false);
 
   // 统计数据
   const [totalCount, setTotalCount] = useState(0);
@@ -59,7 +67,34 @@ export default function App() {
     fetchAudioRecords();
     fetchMemos();
     fetchDatabases();
+    requestNotifyPermission();
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchKeyword(searchInput), 280);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    savePref('darkMode', darkMode);
+  }, [darkMode]);
+
+  useEffect(() => {
+    savePref('sidebarCollapsed', sidebarCollapsed);
+    const width = sidebarCollapsed ? 56 : 256;
+    if (window.webkit?.messageHandlers?.nativeApp) {
+      window.webkit.messageHandlers.nativeApp.postMessage({ action: 'sidebarWidth', width });
+    }
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    savePref('currentView', currentView);
+    savePref('currentNotebookId', currentNotebookId);
+  }, [currentView, currentNotebookId]);
+
+  useEffect(() => {
+    if (currentNote?.id) savePref('lastNoteId', currentNote.id);
+  }, [currentNote?.id]);
 
   const fetchDatabases = async () => {
     try {
@@ -215,26 +250,29 @@ export default function App() {
       }
       setNotes(safeNoteList);
 
-      // 同步选中第一篇笔记
       if (safeNoteList.length > 0) {
-        if (!currentNote || !safeNoteList.some(n => n.id === currentNote.id)) {
+        const restoreId = !didRestoreRef.current ? restoreNoteIdRef.current : null;
+        didRestoreRef.current = true;
+        const currentId = currentNote?.id;
+        if (restoreId && safeNoteList.some(n => n.id === restoreId)) {
+          handleSelectNote(restoreId);
+        } else if (!currentId || !safeNoteList.some(n => n.id === currentId)) {
           handleSelectNote(safeNoteList[0].id);
         }
       } else {
         setCurrentNote(null);
       }
 
-      // 获取各分类计数
-      const allNotes = await getNotes({ is_trashed: false });
-      const trashed = await getNotes({ is_trashed: true });
-      const starred = (Array.isArray(allNotes) ? allNotes : []).filter(n => n.is_starred);
-      const totalTrashedCount = (Array.isArray(trashed) ? trashed.length : 0) + (trashedDbs ? trashedDbs.length : 0);
+      try {
+        const stats = await getNoteStats();
+        const extraTrash = (trashedDbs || []).length;
+        setTotalCount(stats.total || 0);
+        setTrashCount((stats.trash || 0) + extraTrash);
+        setStarredCount(stats.starred || 0);
+      } catch (e) {
+        setTotalCount(safeNoteList.filter(n => !n.is_trashed).length);
+      }
 
-      setTotalCount(Array.isArray(allNotes) ? allNotes.length : 0);
-      setTrashCount(totalTrashedCount);
-      setStarredCount(starred.length);
-
-      // 刷新笔记本数据以更新各笔记本 note_count
       const nbData = await getNotebooks();
       setNotebooks(Array.isArray(nbData) ? nbData : []);
     } catch (err) {
@@ -297,6 +335,9 @@ export default function App() {
   // 笔记 CRUD
   const handleSelectNote = async (id) => {
     try {
+      if (typeof window.__noteFlushSave === 'function') {
+        await window.__noteFlushSave();
+      }
       if (unlockedNotesCache[id]) {
         setCurrentNote(unlockedNotesCache[id]);
         return;
@@ -326,7 +367,7 @@ export default function App() {
   const handleUpdateNote = async (id, data) => {
     try {
       const updated = await updateNote(id, data);
-      setNotes(notes.map(n => n.id === id ? { ...n, ...updated } : n));
+      setNotes(prev => prev.map(n => n.id === id ? { ...n, ...updated, content_json: undefined } : n));
       if (currentNote?.id === id) {
         setCurrentNote(prev => ({ ...prev, ...updated }));
       }
@@ -339,6 +380,11 @@ export default function App() {
     } catch (err) {
       console.error('Failed to auto-save note:', err);
     }
+  };
+
+  const handleMoveNoteToNotebook = async (noteId, notebookId) => {
+    await handleUpdateNote(noteId, { notebook_id: notebookId });
+    await fetchNotes();
   };
 
   const handleToggleStar = async (id, isStarred) => {
@@ -472,6 +518,66 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const meta = e.metaKey || e.ctrlKey;
+      const tag = (e.target?.tagName || '').toLowerCase();
+      const typing = tag === 'input' || tag === 'textarea' || e.target?.isContentEditable;
+      if (meta && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setIsPaletteOpen(true);
+        return;
+      }
+      if (meta && e.key === ',') {
+        e.preventDefault();
+        setIsSettingsOpen(true);
+        return;
+      }
+      if (meta && e.key.toLowerCase() === 'n' && !e.shiftKey) {
+        e.preventDefault();
+        handleCreateNote();
+        return;
+      }
+      if (meta && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        document.getElementById('note-search-input')?.focus();
+        return;
+      }
+      if (meta && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (typeof window.__noteFlushSave === 'function') window.__noteFlushSave();
+        return;
+      }
+      if (meta && e.key === '\\') {
+        e.preventDefault();
+        setSidebarCollapsed((v) => !v);
+        return;
+      }
+      if (e.key === 'Escape' && isPaletteOpen) {
+        setIsPaletteOpen(false);
+      }
+      if (!meta && !typing && e.key === '/') {
+        e.preventDefault();
+        setIsPaletteOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isPaletteOpen, currentView, currentNotebookId]);
+
+  useEffect(() => {
+    window.__noteNative = {
+      newNote: () => handleCreateNote(),
+      focusSearch: () => document.getElementById('note-search-input')?.focus(),
+      openSettings: () => setIsSettingsOpen(true),
+      saveNow: () => window.__noteFlushSave?.(),
+      commandPalette: () => setIsPaletteOpen(true),
+      toggleSidebar: () => setSidebarCollapsed((v) => !v),
+      toggleDark: () => setDarkMode((v) => !v)
+    };
+    return () => { delete window.__noteNative; };
+  });
+
   // 思维导图与 AI 助手弹窗触发
   const handleOpenMindMap = (content) => {
     setMindMapContent(content);
@@ -500,6 +606,9 @@ export default function App() {
       <div className="flex h-screen w-screen overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
         {/* 1. 左侧分类与导航栏 */}
         <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() => setSidebarCollapsed(v => !v)}
+          onDropNote={handleMoveNoteToNotebook}
           notebooks={notebooks}
           currentView={currentView}
           currentNotebookId={currentNotebookId}
@@ -510,7 +619,7 @@ export default function App() {
           onDeleteNotebook={handleDeleteNotebook}
           onOpenSettings={() => setIsSettingsOpen(true)}
           darkMode={darkMode}
-          onToggleDarkMode={() => setDarkMode(!darkMode)}
+          onToggleDarkMode={() => setDarkMode(v => !v)}
           totalNotesCount={totalCount}
           trashNotesCount={trashCount}
           starredNotesCount={starredCount}
@@ -593,8 +702,8 @@ export default function App() {
               onEmptyTrash={handleEmptyTrash}
               onBatchImport={handleBatchImport}
               isTrashView={currentView === 'trash'}
-              searchKeyword={searchKeyword}
-              onSearchChange={setSearchKeyword}
+              searchKeyword={searchInput}
+              onSearchChange={setSearchInput}
               currentViewTitle={getCurrentViewTitle()}
             />
 
@@ -637,6 +746,21 @@ export default function App() {
         <SettingsModal
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
+        />
+
+        <CommandPalette
+          isOpen={isPaletteOpen}
+          onClose={() => setIsPaletteOpen(false)}
+          notes={notes}
+          notebooks={notebooks}
+          onSelectNote={async (id) => {
+            setCurrentView('all');
+            await handleSelectNote(id);
+          }}
+          onSelectNotebook={handleSelectNotebook}
+          onCreateNote={handleCreateNote}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onToggleDarkMode={() => setDarkMode(v => !v)}
         />
 
         {/* 6. 多端局域网双向同步与配对弹窗 */}

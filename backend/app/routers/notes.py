@@ -7,11 +7,11 @@ import re
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile, Form
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, desc
+from sqlalchemy import or_, desc, func
 from ..database import get_db
 from ..models import Note, Notebook, AudioRecord, Database
 from ..schemas import (
-    NoteCreate, NoteUpdate, NoteOut,
+    NoteCreate, NoteUpdate, NoteOut, NoteStatsOut,
     NoteLockRequest, NoteUnlockRequest, NoteVerifyPasswordRequest,
     GraphDataOut, GraphNode, GraphLink, BacklinksOut, BacklinkItem
 )
@@ -121,33 +121,55 @@ def get_notes(
 
     notes = query.order_by(desc(Note.updated_at)).all()
 
+    audio_counts = dict(
+        db.query(AudioRecord.note_id, func.count(AudioRecord.id))
+        .group_by(AudioRecord.note_id)
+        .all()
+    )
+
     result = []
     for n in notes:
-        audio_count = db.query(AudioRecord).filter(AudioRecord.note_id == n.id).count()
         tags_list = []
         try:
             tags_list = json.loads(n.tags) if n.tags else []
         except Exception:
             tags_list = []
-        
+
         is_locked = bool(n.is_locked)
+        full_content = n.content or ""
+        preview = "" if is_locked else (n.summary or full_content[:240])
         note_dict = {
             "id": n.id,
             "title": n.title,
-            "content": "" if is_locked else n.content,
-            "content_json": "" if is_locked else n.content_json,
+            "content": preview,
+            "content_json": "",
             "notebook_id": n.notebook_id,
-            "summary": "🔒 此重要笔记已设置密码锁定保护" if is_locked else n.summary,
+            "summary": "🔒 此重要笔记已设置密码锁定保护" if is_locked else (n.summary or ""),
             "tags": tags_list,
             "is_starred": n.is_starred,
             "is_trashed": n.is_trashed,
             "is_locked": is_locked,
             "created_at": n.created_at,
             "updated_at": n.updated_at,
-            "audio_count": audio_count
+            "audio_count": int(audio_counts.get(n.id) or 0),
+            "content_length": 0 if is_locked else len(full_content),
         }
         result.append(note_dict)
     return result
+
+
+@router.get("/stats", response_model=NoteStatsOut)
+def get_note_stats(db: Session = Depends(get_db)):
+    """一次查询返回侧栏计数，避免列表接口被重复打三次。"""
+    total = db.query(func.count(Note.id)).filter(Note.is_trashed == False).scalar() or 0
+    trash = db.query(func.count(Note.id)).filter(Note.is_trashed == True).scalar() or 0
+    starred = (
+        db.query(func.count(Note.id))
+        .filter(Note.is_trashed == False, Note.is_starred == True)
+        .scalar()
+        or 0
+    )
+    return {"total": int(total), "trash": int(trash), "starred": int(starred)}
 
 @router.post("", response_model=NoteOut)
 def create_note(data: NoteCreate, db: Session = Depends(get_db)):
@@ -212,7 +234,8 @@ def get_note(note_id: str, db: Session = Depends(get_db)):
         "is_locked": is_locked,
         "created_at": note.created_at,
         "updated_at": note.updated_at,
-        "audio_count": audio_count
+        "audio_count": audio_count,
+        "content_length": 0 if is_locked else len(note.content or "")
     }
 
 @router.put("/{note_id}", response_model=NoteOut)

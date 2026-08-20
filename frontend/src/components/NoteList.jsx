@@ -126,8 +126,9 @@ export default function NoteList({
         <div className="relative" style={{ WebkitAppRegion: 'no-drag' }}>
           <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" />
           <input
+            id="note-search-input"
             type="text"
-            placeholder="搜索笔记标题与内容..."
+            placeholder="搜索笔记标题与内容... (⌘F)"
             value={searchKeyword}
             onChange={(e) => onSearchChange(e.target.value)}
             className="w-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-xs pl-8 pr-3 py-1.5 rounded-lg border border-transparent focus:border-blue-400 focus:bg-white dark:focus:bg-gray-900 focus:outline-none transition"
@@ -158,6 +159,12 @@ export default function NoteList({
             return (
               <div
                 key={note.id}
+                draggable={!isTrashView && !note.is_database}
+                onDragStart={(e) => {
+                  if (note.is_database) return;
+                  e.dataTransfer.setData('application/x-note-id', note.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
                 onClick={() => onSelectNote(note.id)}
                 className={`p-3 cursor-pointer transition-all relative group ${
                   isSelected

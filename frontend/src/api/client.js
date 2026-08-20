@@ -13,6 +13,7 @@ export const deleteNotebook = (id) => api.delete(`/notebooks/${id}`).then(res =>
 
 // 笔记
 export const getNotes = (params = {}) => api.get('/notes', { params }).then(res => res.data);
+export const getNoteStats = () => api.get('/notes/stats').then(res => res.data);
 export const getNote = (id) => api.get(`/notes/${id}`).then(res => res.data);
 export const createNote = (data) => api.post('/notes', data).then(res => res.data);
 export const updateNote = (id, data) => api.put(`/notes/${id}`, data).then(res => res.data);
@@ -192,6 +193,29 @@ export const restoreDatabase = (id) => api.post(`/databases/${id}/restore`).then
 export const createDatabaseRow = (databaseId, data = {}) => api.post(`/databases/${databaseId}/rows`, data).then(res => res.data);
 export const updateDatabaseRow = (databaseId, rowId, data) => api.put(`/databases/${databaseId}/rows/${rowId}`, data).then(res => res.data);
 export const deleteDatabaseRow = (databaseId, rowId) => api.delete(`/databases/${databaseId}/rows/${rowId}`).then(res => res.data);
+
+export const downloadBackup = async () => {
+  const res = await api.post('/system/backup', null, { responseType: 'blob' });
+  const disp = res.headers['content-disposition'] || '';
+  const match = disp.match(/filename="?([^"]+)"?/i);
+  const filename = match ? match[1] : `note_backup_${Date.now()}.tar.gz`;
+  const url = window.URL.createObjectURL(res.data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+export const restoreBackup = (file) => {
+  const form = new FormData();
+  form.append('file', file);
+  return api.post('/system/restore', form, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }).then(res => res.data);
+};
 
 export default api;
 

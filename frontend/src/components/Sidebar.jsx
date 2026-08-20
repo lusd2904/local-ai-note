@@ -3,7 +3,7 @@ import {
   BookOpen, Folder, FolderPlus, Star, Trash2, Mic, 
   Settings, Moon, Sun, ChevronRight, ChevronDown, Plus, 
   Edit2, Check, X, CornerDownRight, Bot, Sparkles, ExternalLink, Globe,
-  ArrowRightLeft, Zap, Share2, Flame, Table, Upload
+  ArrowRightLeft, Zap, Share2, Flame, Table, Upload, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 
 // 将扁平笔记本数组转换为树形结构
@@ -28,7 +28,8 @@ function NotebookTreeNode({
   onSelectNotebook,
   onOpenCreateModal,
   onUpdateNotebook,
-  onDeleteNotebook
+  onDeleteNotebook,
+  onDropNote
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -109,6 +110,13 @@ function NotebookTreeNode({
           <>
             <div
               onClick={() => onSelectNotebook(node.id)}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const noteId = e.dataTransfer.getData('application/x-note-id');
+                if (noteId && typeof onDropNote === 'function') onDropNote(noteId, node.id);
+              }}
               className="flex items-center space-x-1.5 flex-1 min-w-0 cursor-pointer"
             >
               {hasChildren ? (
@@ -190,6 +198,7 @@ function NotebookTreeNode({
               onOpenCreateModal={onOpenCreateModal}
               onUpdateNotebook={onUpdateNotebook}
               onDeleteNotebook={onDeleteNotebook}
+              onDropNote={onDropNote}
             />
           ))}
         </div>
@@ -199,6 +208,9 @@ function NotebookTreeNode({
 }
 
 export default function Sidebar({
+  collapsed = false,
+  onToggleCollapsed,
+  onDropNote,
   notebooks = [],
   currentView,
   currentNotebookId,
@@ -270,13 +282,48 @@ export default function Sidebar({
     setDbModalIcon('📊');
   };
 
+  if (collapsed) {
+    return (
+      <aside className="w-14 bg-mac-sidebar dark:bg-mac-sidebarDark border-r border-mac-border dark:border-mac-borderDark flex flex-col h-screen select-none shrink-0">
+        <div style={{ WebkitAppRegion: 'drag' }} className="h-12 shrink-0" />
+        <div className="flex-1 flex flex-col items-center py-2 space-y-1">
+          <button type="button" style={{ WebkitAppRegion: 'no-drag' }} onClick={onToggleCollapsed} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800" title="展开侧栏 (⌘\\)">
+            <PanelLeftOpen className="w-4 h-4" />
+          </button>
+          <button type="button" style={{ WebkitAppRegion: 'no-drag' }} onClick={() => onSelectView('all')} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800" title="全部笔记">
+            <BookOpen className="w-4 h-4 text-blue-500" />
+          </button>
+          <button type="button" style={{ WebkitAppRegion: 'no-drag' }} onClick={() => onSelectView('starred')} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800" title="收藏">
+            <Star className="w-4 h-4 text-amber-500" />
+          </button>
+          <button type="button" style={{ WebkitAppRegion: 'no-drag' }} onClick={() => onSelectView('memos')} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800" title="闪念">
+            <Zap className="w-4 h-4 text-amber-500" />
+          </button>
+          <button type="button" style={{ WebkitAppRegion: 'no-drag' }} onClick={onOpenSettings} className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800" title="设置">
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className="w-64 bg-mac-sidebar dark:bg-mac-sidebarDark border-r border-mac-border dark:border-mac-borderDark flex flex-col h-screen select-none shrink-0 transition-colors">
       {/* 顶部 macOS 原生交通灯预留拖拽区域 */}
       <div 
         style={{ WebkitAppRegion: 'drag' }}
-        className="h-12 border-b border-mac-border/50 dark:border-mac-borderDark/50 shrink-0 cursor-default"
-      />
+        className="h-12 border-b border-mac-border/50 dark:border-mac-borderDark/50 shrink-0 cursor-default flex items-center justify-end px-2"
+      >
+        <button
+          type="button"
+          style={{ WebkitAppRegion: 'no-drag' }}
+          onClick={onToggleCollapsed}
+          className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200/70 dark:hover:bg-gray-800"
+          title="收起侧栏 (⌘\\)"
+        >
+          <PanelLeftClose className="w-4 h-4" />
+        </button>
+      </div>
 
       {/* 导航菜单 */}
       <div className="flex-1 overflow-y-auto px-2 py-3 space-y-1">
@@ -614,6 +661,7 @@ export default function Sidebar({
                   onOpenCreateModal={handleOpenCreateModal}
                   onUpdateNotebook={onUpdateNotebook}
                   onDeleteNotebook={onDeleteNotebook}
+                  onDropNote={onDropNote}
                 />
               ))
             )}

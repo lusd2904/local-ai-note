@@ -36,10 +36,16 @@
 
 ### 方案二：Xcode 原生 iOS App 编译打包
 
-1. 进入 `ios/` 目录。
-2. 将 `frontend/dist` 资源同步至 Xcode 工程包内。
-3. 使用 Xcode 打开工程并连接真机 iPhone。
-4. 点击 `Run` 即可直接编译并安装到真机设备上。
+1. 如前端有更新，先在仓库根目录构建，再同步静态资源：
+   ```bash
+   cd frontend && npm run build
+   bash ios/sync_www.sh
+   ```
+2. 用 Xcode 打开 `ios/NoteApp.xcodeproj`，选中你的 iPhone。
+3. 首次真机安装：iPhone「设置 → 通用 → VPN 与设备管理」里信任开发者证书。
+4. `Product → Clean Build Folder`，然后 `Cmd + R` 运行。
+
+不需要再手动把 `www` 拖进 Copy Bundle Resources。工程会在编译时自动把 `NoteApp/www` 打进 App。若页面加载失败，屏幕上会直接显示诊断信息，不必翻 Xcode 控制台。
 
 ---
 

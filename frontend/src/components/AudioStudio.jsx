@@ -9,6 +9,7 @@ import {
   getAudioRecords, uploadAudio, processAudio, 
   convertAudioToNote, deleteAudioRecord 
 } from '../api/client';
+import { notify } from '../utils/notify';
 
 export default function AudioStudio({ onNoteCreated }) {
   const [records, setRecords] = useState([]);
@@ -211,6 +212,7 @@ export default function AudioStudio({ onNoteCreated }) {
       const updated = await processAudio(id);
       setSelectedRecord(updated);
       await loadRecords();
+      notify('录音分析完成', updated.file_name || '已生成转写与纪要');
     } catch (err) {
       alert('分析失败: ' + (err.response?.data?.detail || err.message));
     }

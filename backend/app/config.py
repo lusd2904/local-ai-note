@@ -27,7 +27,7 @@ EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Local AI Note"
-    VERSION: str = "1.0.0"
+    VERSION: str = "1.0.2"
     DATABASE_URL: str = f"sqlite:///{DATA_DIR / 'notes.db'}"
     
     # 默认 AI 配置 (用户也可以在前端设置面板中自由动态修改保存)

@@ -6,15 +6,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .config import settings, UPLOAD_DIR, AUDIO_DIR, IMAGES_DIR
-from .database import engine, Base, SessionLocal
+from .database import engine, Base, SessionLocal, ensure_indexes
 from .models import Notebook, Note, AISetting
-from .routers import notebooks, notes, audio, ai, upload, sync, memos, databases
+from .routers import notebooks, notes, audio, ai, upload, sync, memos, databases, system
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 创建数据库表
+# 创建数据库表与查询索引
 Base.metadata.create_all(bind=engine)
+ensure_indexes()
 
 app = FastAPI(
     title="Local AI Note API",
@@ -44,6 +45,7 @@ app.include_router(audio.router)
 app.include_router(ai.router)
 app.include_router(upload.router)
 app.include_router(sync.router)
+app.include_router(system.router)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

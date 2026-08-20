@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { uploadImage, streamAIAnalyze, getNoteBacklinks } from '../api/client';
 import LockModal from './LockModal';
+import { tiptapJsonToMarkdown, makeSummary } from '../utils/markdown';
 
 // 🌟 将 Markdown 格式转换为 Tiptap 能直接渲染为高清图片与富文本的 HTML
 function markdownToRichHTML(md) {
@@ -159,7 +160,44 @@ function EditorCore({
 
   const saveTimeoutRef = useRef(null);
   const noteIdRef = useRef(note?.id);
+  const editorRef = useRef(null);
+  const onUpdateNoteRef = useRef(onUpdateNote);
   noteIdRef.current = note?.id;
+  onUpdateNoteRef.current = onUpdateNote;
+
+  const buildPayloadFromEditor = (ed) => {
+    if (!ed || ed.isDestroyed) return null;
+    const json = ed.getJSON();
+    const markdown = tiptapJsonToMarkdown(json);
+    return {
+      content: markdown,
+      content_json: JSON.stringify(json),
+      summary: makeSummary(markdown)
+    };
+  };
+
+  const flushSave = () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    const payload = buildPayloadFromEditor(editorRef.current);
+    const id = noteIdRef.current;
+    if (payload && id && onUpdateNoteRef.current) {
+      return onUpdateNoteRef.current(id, payload);
+    }
+    return Promise.resolve();
+  };
+
+  useEffect(() => {
+    window.__noteFlushSave = flushSave;
+    return () => {
+      flushSave();
+      if (window.__noteFlushSave === flushSave) {
+        delete window.__noteFlushSave;
+      }
+    };
+  }, [note?.id]);
 
   // 初始化 Tiptap 所见即所得编辑器
   const editor = useEditor({
@@ -242,20 +280,18 @@ function EditorCore({
         return false;
       }
     },
+    onCreate: ({ editor: ed }) => {
+      editorRef.current = ed;
+    },
     onUpdate: ({ editor: ed }) => {
       const activeId = noteIdRef.current;
       if (!activeId || !ed || ed.isDestroyed) return;
-
-      const textContent = ed.getText();
-      const jsonContent = JSON.stringify(ed.getJSON());
-
+      editorRef.current = ed;
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
-        if (onUpdateNote && noteIdRef.current === activeId) {
-          onUpdateNote(activeId, {
-            content: textContent,
-            content_json: jsonContent
-          });
+        if (onUpdateNoteRef.current && noteIdRef.current === activeId) {
+          const payload = buildPayloadFromEditor(ed);
+          if (payload) onUpdateNoteRef.current(activeId, payload);
         }
       }, 800);
     }
@@ -294,6 +330,7 @@ function EditorCore({
     if (editor && !editor.isDestroyed) {
       editor.setEditable(!isPreviewMode);
     }
+    editorRef.current = editor;
   }, [isPreviewMode, editor]);
 
   // 组件卸载时清理定时器与全局下拉监听
@@ -312,7 +349,6 @@ function EditorCore({
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, []);
 
@@ -418,19 +454,16 @@ function EditorCore({
             }
           } else if (action === 'expand') {
             editor.commands.setContent(markdownToRichHTML(resText));
-            if (onUpdateNote) {
-              onUpdateNote(note.id, { content: editor.getText(), content_json: JSON.stringify(editor.getJSON()) });
-            }
+            const payload = buildPayloadFromEditor(editor);
+            if (onUpdateNote && payload) onUpdateNote(note.id, payload);
           } else if (action === 'polish') {
             editor.commands.setContent(markdownToRichHTML(resText));
-            if (onUpdateNote) {
-              onUpdateNote(note.id, { content: editor.getText(), content_json: JSON.stringify(editor.getJSON()) });
-            }
+            const payload = buildPayloadFromEditor(editor);
+            if (onUpdateNote && payload) onUpdateNote(note.id, payload);
           } else if (action === 'summary') {
             editor.chain().focus().insertContent(`\n\n<blockquote><p>🤖 <strong>AI 核心要点总结：</strong><br/>${resText.replace(/\n/g, '<br/>')}</p></blockquote>\n\n`).run();
-            if (onUpdateNote) {
-              onUpdateNote(note.id, { summary: resText.slice(0, 150), content: editor.getText(), content_json: JSON.stringify(editor.getJSON()) });
-            }
+            const payload = buildPayloadFromEditor(editor);
+            if (onUpdateNote && payload) onUpdateNote(note.id, { ...payload, summary: resText.slice(0, 150) });
           }
         },
         (err) => {

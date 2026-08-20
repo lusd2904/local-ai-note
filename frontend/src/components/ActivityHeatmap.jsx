@@ -18,7 +18,7 @@ export default function ActivityHeatmap({ notes = [], memos = [] }) {
       const d = n.created_at.slice(0, 10);
       if (!dateMap[d]) dateMap[d] = { count: 0, chars: 0 };
       dateMap[d].count += 1;
-      dateMap[d].chars += (n.content || '').length;
+      dateMap[d].chars += (typeof n.content_length === 'number' ? n.content_length : (n.content || '').length);
     });
 
     // 统计闪念

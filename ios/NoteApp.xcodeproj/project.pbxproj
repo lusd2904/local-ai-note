@@ -26,14 +26,6 @@
 		AA62C9D0FEAA6D4DB6B12F8F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		4044FDEE30361564001CA066 /* www */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = www;
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
-
 /* Begin PBXGroup section */
 		6F6758021FBF5D8EFAC1C5A3 /* NoteApp */ = {
 			isa = PBXGroup;
@@ -44,6 +36,7 @@
 				9771E8BD5AC3FEB4B3B84B5E /* LocalHttpServer.swift */,
 				3DB925ED1642B598A5CD88CD /* SceneDelegate.swift */,
 				82F40D072F2BA3495FF33936 /* ViewController.swift */,
+				4044FE293036170F001CA066 /* www */,
 			);
 			path = NoteApp;
 			sourceTree = "<group>";
@@ -59,8 +52,6 @@
 		C24824D35BCA361B16814708 = {
 			isa = PBXGroup;
 			children = (
-				4044FDEE30361564001CA066 /* www */,
-				4044FE293036170F001CA066 /* www */,
 				6F6758021FBF5D8EFAC1C5A3 /* NoteApp */,
 				90A12EE56BC5EC001B5DDD4D /* Products */,
 			);
@@ -75,13 +66,11 @@
 			buildPhases = (
 				4D7DACE99F2EE6EAFD28CA3C /* Sources */,
 				F0DF062AE1DAB57A3B6752F8 /* Resources */,
+				7F8A9B0C1D2E3F4A5B6C7D8E /* Copy www into bundle */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				4044FDEE30361564001CA066 /* www */,
 			);
 			name = NoteApp;
 			packageProductDependencies = (
@@ -134,6 +123,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		7F8A9B0C1D2E3F4A5B6C7D8E /* Copy www into bundle */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy www into bundle";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nSRC=\"${SRCROOT}/NoteApp/www\"\nDEST=\"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/www\"\nif [ ! -d \"$SRC\" ]; then\n  echo \"error: missing $SRC\" >&2\n  exit 1\nfi\nif [ ! -f \"$SRC/index.html\" ]; then\n  echo \"error: missing $SRC/index.html\" >&2\n  exit 1\nfi\nmkdir -p \"$DEST\"\nif command -v rsync >/dev/null 2>&1; then\n  rsync -a \"$SRC/\" \"$DEST/\"\nelse\n  cp -R \"$SRC/.\" \"$DEST/\"\nfi\necho \"Copied www -> $DEST\"\nls \"$DEST\" | head -20\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		4D7DACE99F2EE6EAFD28CA3C /* Sources */ = {
@@ -284,11 +295,13 @@
 				ENABLE_BITCODE = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NoteApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.localai.note.ios;
+				PRODUCT_MODULE_NAME = NoteApp;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -303,11 +316,13 @@
 				ENABLE_BITCODE = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NoteApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.localai.note.ios;
+				PRODUCT_MODULE_NAME = NoteApp;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

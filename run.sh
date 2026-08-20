@@ -30,6 +30,7 @@ show_help() {
   echo ""
   echo "常用命令:"
   echo -e "  ${BLUE}app${NC}              打开 macOS 原生独立桌面应用 Note.app (推荐)"
+  echo -e "  ${BLUE}compile-app${NC}      从 scripts/main.swift 重新编译 Note.app"
   echo -e "  ${BLUE}install-app${NC}      将 Note.app 安装到 macOS「应用程序」(/Applications)"
   echo -e "  ${BLUE}start${NC}            启动后端容器服务"
   echo -e "  ${BLUE}stop${NC}             停止正在运行的笔记系统"
@@ -57,6 +58,10 @@ case "${cmd}" in
     echo -e "${BLUE}🚀 正在启动 Note macOS 原生独立桌面应用...${NC}"
     open "${SCRIPT_DIR}/Note.app"
     echo -e "${GREEN}✅ 已唤起 Note 桌面窗口！${NC}"
+    ;;
+
+  compile-app)
+    bash "${SCRIPT_DIR}/scripts/compile_note_app.sh"
     ;;
 
   install-app)

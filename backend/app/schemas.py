@@ -63,9 +63,15 @@ class NoteOut(NoteBase):
     created_at: datetime
     updated_at: datetime
     audio_count: Optional[int] = 0
+    content_length: Optional[int] = 0
 
     class Config:
         from_attributes = True
+
+class NoteStatsOut(BaseModel):
+    total: int = 0
+    trash: int = 0
+    starred: int = 0
 
 class NoteLockRequest(BaseModel):
     password: str

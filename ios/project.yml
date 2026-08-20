@@ -29,6 +29,16 @@ targets:
       base:
         INFOPLIST_FILE: NoteApp/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.localai.note.ios
+        PRODUCT_MODULE_NAME: NoteApp
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_BITCODE: NO
         GENERATE_INFOPLIST_FILE: NO
+    postCompileScripts:
+      - name: Copy www into bundle
+        script: |
+          set -e
+          SRC="${SRCROOT}/NoteApp/www"
+          DEST="${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/www"
+          mkdir -p "$DEST"
+          rsync -a "$SRC/" "$DEST/"
+          echo "Copied www -> $DEST"

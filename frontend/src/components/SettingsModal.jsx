@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Sparkles, Key, Check,
   Bot, Zap, Cpu, CheckCircle2, AlertCircle, RefreshCw 
 } from 'lucide-react';
-import { getAISettings, updateAISettings, analyzeContent } from '../api/client';
+import { getAISettings, updateAISettings, analyzeContent, downloadBackup, restoreBackup } from '../api/client';
 
 const DEFAULT_PROVIDERS = {
   claude: {
@@ -49,6 +49,8 @@ export default function SettingsModal({ isOpen, onClose }) {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const restoreInputRef = useRef(null);
 
   // 当前默认生效的渠道
   const [activeProvider, setActiveProvider] = useState('claude');
@@ -376,6 +378,59 @@ export default function SettingsModal({ isOpen, onClose }) {
                 value={currentCfg.temperature !== undefined ? currentCfg.temperature : 0.7}
                 onChange={(e) => handleCurrentFieldChange('temperature', parseFloat(e.target.value))}
                 className="w-full accent-blue-500 cursor-pointer"
+              />
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/40 space-y-2">
+            <div className="text-xs font-semibold text-gray-700 dark:text-gray-200">本地数据备份</div>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400">将笔记库、录音和图片打包下载；恢复会覆盖当前 data 目录。</p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={backupBusy}
+                onClick={async () => {
+                  try {
+                    setBackupBusy(true);
+                    await downloadBackup();
+                  } catch (err) {
+                    alert('备份失败: ' + (err.response?.data?.detail || err.message));
+                  } finally {
+                    setBackupBusy(false);
+                  }
+                }}
+                className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-xs"
+              >
+                {backupBusy ? '处理中…' : '下载备份'}
+              </button>
+              <button
+                type="button"
+                onClick={() => restoreInputRef.current?.click()}
+                className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-xs"
+              >
+                从备份恢复
+              </button>
+              <input
+                ref={restoreInputRef}
+                type="file"
+                accept=".tar.gz,application/gzip"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!file) return;
+                  if (!window.confirm('恢复将覆盖当前本地数据，确定继续？')) return;
+                  try {
+                    setBackupBusy(true);
+                    await restoreBackup(file);
+                    alert('恢复完成，请刷新页面。');
+                    window.location.reload();
+                  } catch (err) {
+                    alert('恢复失败: ' + (err.response?.data?.detail || err.message));
+                  } finally {
+                    setBackupBusy(false);
+                  }
+                }}
               />
             </div>
           </div>

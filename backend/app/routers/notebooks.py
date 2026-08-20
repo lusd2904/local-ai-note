@@ -1,6 +1,7 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from ..database import get_db
 from ..models import Notebook, Note
 from ..schemas import NotebookCreate, NotebookUpdate, NotebookOut
@@ -19,9 +20,15 @@ def get_all_descendant_ids(notebook_id: str, db: Session) -> List[str]:
 def get_all_notebooks(db: Session = Depends(get_db)):
     """获取所有笔记本列表（附带笔记计数）"""
     notebooks = db.query(Notebook).order_by(Notebook.sort_order.asc(), Notebook.created_at.asc()).all()
+    count_rows = (
+        db.query(Note.notebook_id, func.count(Note.id))
+        .filter(Note.is_trashed == False)
+        .group_by(Note.notebook_id)
+        .all()
+    )
+    count_map = {nid: int(cnt) for nid, cnt in count_rows}
     result = []
     for nb in notebooks:
-        note_count = db.query(Note).filter(Note.notebook_id == nb.id, Note.is_trashed == False).count()
         nb_dict = {
             "id": nb.id,
             "name": nb.name,
@@ -31,7 +38,7 @@ def get_all_notebooks(db: Session = Depends(get_db)):
             "sort_order": nb.sort_order,
             "created_at": nb.created_at,
             "updated_at": nb.updated_at,
-            "note_count": note_count
+            "note_count": count_map.get(nb.id, 0)
         }
         result.append(nb_dict)
     return result

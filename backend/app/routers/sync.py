@@ -9,6 +9,7 @@ from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
+from ..config import DATA_DIR
 from ..models import Note, Notebook, AudioRecord, AISetting, Memo
 from ..schemas import (
     SyncInfoOut, SyncPairRequest, SyncPairOut,
@@ -27,7 +28,8 @@ PAIRING_CODE_TTL = 300     # 配对码有效期 (秒) — 5分钟自动轮换 (C
 MAX_PAIR_FAILURES = 5      # 最大连续配对失败次数 (C2)
 PAIR_LOCKOUT_SECONDS = 60  # 锁定时长 (秒) (C2)
 
-# 运行时状态
+# 运行时状态（持久化到 data/sync_state.json，避免 Docker 重启后要重新扫码）
+_STATE_FILE = DATA_DIR / "sync_state.json"
 _SERVER_TOKEN = secrets.token_hex(16)
 _PAIRED_DEVICES: Dict[str, Dict[str, Any]] = {}
 
@@ -40,6 +42,40 @@ _pairing_state = {
 }
 
 
+def _persist_sync_state():
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "server_token": _SERVER_TOKEN,
+            "paired_devices": _PAIRED_DEVICES,
+            "pairing_state": _pairing_state,
+        }
+        _STATE_FILE.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _load_sync_state():
+    global _SERVER_TOKEN, _PAIRED_DEVICES, _pairing_state
+    try:
+        if not _STATE_FILE.exists():
+            _persist_sync_state()
+            return
+        data = json.loads(_STATE_FILE.read_text(encoding="utf-8"))
+        if data.get("server_token"):
+            _SERVER_TOKEN = data["server_token"]
+        if isinstance(data.get("paired_devices"), dict):
+            _PAIRED_DEVICES = data["paired_devices"]
+        saved = data.get("pairing_state") or {}
+        if isinstance(saved, dict):
+            _pairing_state.update({k: saved[k] for k in saved if k in _pairing_state})
+    except Exception:
+        pass
+
+
+_load_sync_state()
+
+
 def _get_or_rotate_pairing_code() -> str:
     """获取当前配对码，若已过期则自动轮换 (C2)"""
     now = time.time()
@@ -48,6 +84,7 @@ def _get_or_rotate_pairing_code() -> str:
         _pairing_state["created_at"] = now
         _pairing_state["fail_count"] = 0
         _pairing_state["locked_until"] = 0.0
+        _persist_sync_state()
     return _pairing_state["code"]
 
 
@@ -210,12 +247,14 @@ def pair_device(data: SyncPairRequest):
     if data.pairing_code.strip() != current_code:
         # C2: 记录失败次数
         _pairing_state["fail_count"] += 1
+        _persist_sync_state()
         if _pairing_state["fail_count"] >= MAX_PAIR_FAILURES:
             _pairing_state["locked_until"] = now + PAIR_LOCKOUT_SECONDS
             _pairing_state["fail_count"] = 0
             # 锁定时自动轮换配对码
             _pairing_state["code"] = str(random.randint(100000, 999999))
             _pairing_state["created_at"] = now
+            _persist_sync_state()
             raise HTTPException(
                 status_code=429,
                 detail=f"连续 {MAX_PAIR_FAILURES} 次配对失败，已锁定 {PAIR_LOCKOUT_SECONDS} 秒并重新生成配对码"
@@ -236,6 +275,7 @@ def pair_device(data: SyncPairRequest):
         "paired_at": datetime.utcnow().isoformat(),
         "last_synced_at": None
     }
+    _persist_sync_state()
 
     # C1: Token 仅在配对成功后返回
     return {
