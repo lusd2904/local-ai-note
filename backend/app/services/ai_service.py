@@ -58,7 +58,11 @@ def get_openai_client(config: Dict[str, Any]) -> AsyncOpenAI:
     """获取标准 OpenAI 兼容客户端"""
     api_key = config.get("api_key") or "dummy-key-for-local-ollama"
     base_url = config.get("base_url") or "https://api.openai.com/v1"
-    return AsyncOpenAI(api_key=api_key, base_url=base_url)
+    # 自动对第三方 OpenAI 兼容代理（缺少 /v1）进行安全补齐
+    if base_url and not base_url.endswith("/v1") and "anthropic" not in base_url and "api.deepseek.com" not in base_url:
+        base_url = base_url.rstrip("/") + "/v1"
+    return AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=120.0)
+
 
 async def call_claude_native_stream(
     api_key: str, 
