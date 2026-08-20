@@ -10,6 +10,7 @@ import SyncModal from './components/SyncModal';
 import GraphViewModal from './components/GraphViewModal';
 import MemoStreamView from './components/MemoStreamView';
 import ActivityHeatmap from './components/ActivityHeatmap';
+import DatabaseContainer from './components/database/DatabaseContainer';
 import ErrorBoundary from './components/ErrorBoundary';
 import AIConsultationView from './components/AIConsultationView';
 import EmbeddedWebAIView from './components/EmbeddedWebAIView';
@@ -17,7 +18,8 @@ import {
   getNotebooks, createNotebook, updateNotebook, deleteNotebook,
   getNotes, getNote, createNote, updateNote, deleteNote, restoreNote, emptyTrash,
   getAudioRecords, analyzeContent, lockNote, unlockNote, verifyNotePassword,
-  cloneNote, batchImportNotes, getMemos
+  cloneNote, batchImportNotes, getMemos,
+  getDatabases, createDatabase
 } from './api/client';
 import { localDb } from './services/localDb';
 
@@ -26,11 +28,13 @@ export default function App() {
   const [notebooks, setNotebooks] = useState([]);
   const [notes, setNotes] = useState([]);
   const [memos, setMemos] = useState([]);
+  const [databases, setDatabases] = useState([]);
+  const [currentDatabaseId, setCurrentDatabaseId] = useState(null);
   const [currentNote, setCurrentNote] = useState(null);
   const [audioRecords, setAudioRecords] = useState([]);
 
   // 视图与导航状态
-  const [currentView, setCurrentView] = useState('all'); // 'all', 'starred', 'trash', 'audio_studio', 'notebook', 'memos'
+  const [currentView, setCurrentView] = useState('all'); // 'all', 'starred', 'trash', 'audio_studio', 'notebook', 'memos', 'database'
   const [currentNotebookId, setCurrentNotebookId] = useState(null);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [darkMode, setDarkMode] = useState(false);
@@ -54,7 +58,37 @@ export default function App() {
     fetchNotebooks();
     fetchAudioRecords();
     fetchMemos();
+    fetchDatabases();
   }, []);
+
+  const fetchDatabases = async () => {
+    try {
+      const list = await getDatabases();
+      setDatabases(list || []);
+      // 若当前没有选中的数据库且列表非空，可在点击时选择
+    } catch (err) {
+      console.warn('Failed to fetch databases:', err);
+    }
+  };
+
+  const handleCreateDatabase = async (title = '新数据表') => {
+    try {
+      const newDb = await createDatabase({ title });
+      await fetchDatabases();
+      setCurrentDatabaseId(newDb.id);
+      setCurrentView('database');
+    } catch (err) {
+      alert('创建数据表失败: ' + err.message);
+    }
+  };
+
+  const handleDatabaseDeleted = async (deletedId) => {
+    await fetchDatabases();
+    if (currentDatabaseId === deletedId) {
+      setCurrentDatabaseId(null);
+      setCurrentView('all');
+    }
+  };
 
   const fetchMemos = async () => {
     try {
@@ -419,14 +453,27 @@ export default function App() {
           starredNotesCount={starredCount}
           audioRecordsCount={audioRecords.length}
           memosCount={memos.length}
+          databases={databases}
+          currentDatabaseId={currentDatabaseId}
+          onSelectDatabase={(dbId) => {
+            setCurrentDatabaseId(dbId);
+            setCurrentNotebookId(null);
+            setCurrentView('database');
+          }}
+          onCreateDatabase={handleCreateDatabase}
           onOpenSyncModal={() => setIsSyncModalOpen(true)}
           onOpenGraphModal={() => setIsGraphModalOpen(true)}
           onOpenHeatmapModal={() => setIsHeatmapModalOpen(true)}
           onBatchImport={handleBatchImport}
         />
 
-        {/* 2. 主区域：根据当前视图切换显示 笔记列表+编辑器 或 闪念速记流 或 录音工坊 或 AI 视图 */}
-        {currentView === 'memos' ? (
+        {/* 2. 主区域：根据当前视图切换显示 笔记列表+编辑器 或 多维数据表 或 闪念速记流 或 录音工坊 或 AI 视图 */}
+        {currentView === 'database' && currentDatabaseId ? (
+          <DatabaseContainer
+            databaseId={currentDatabaseId}
+            onDatabaseDeleted={handleDatabaseDeleted}
+          />
+        ) : currentView === 'memos' ? (
           <MemoStreamView
             onNavigateToNote={async (noteId) => {
               await fetchNotes();

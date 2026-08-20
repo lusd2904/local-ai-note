@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import settings, UPLOAD_DIR, AUDIO_DIR, IMAGES_DIR
 from .database import engine, Base, SessionLocal
 from .models import Notebook, Note, AISetting
-from .routers import notebooks, notes, audio, ai, upload, sync, memos
+from .routers import notebooks, notes, audio, ai, upload, sync, memos, databases
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,6 +38,7 @@ app.mount("/api/uploads/images", StaticFiles(directory=str(IMAGES_DIR)), name="i
 # 注册路由
 app.include_router(notebooks.router)
 app.include_router(notes.router)
+app.include_router(databases.router)
 app.include_router(memos.router)
 app.include_router(audio.router)
 app.include_router(ai.router)

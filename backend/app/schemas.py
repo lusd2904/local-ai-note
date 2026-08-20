@@ -276,5 +276,101 @@ class SyncTwoWayOut(BaseModel):
     sync_timestamp: datetime
     stats: Dict[str, Any] = {}
 
+# ----------------- Notion 式多维数据库表 (Databases) -----------------
+class ColumnOption(BaseModel):
+    id: str
+    name: str
+    color: str = "blue"
+
+class ColumnSchema(BaseModel):
+    id: str
+    name: str
+    type: str  # title, text, select, multi_select, status, date, number, checkbox
+    width: Optional[int] = 160
+    options: Optional[List[ColumnOption]] = []
+    format: Optional[str] = None # percent, currency, rating
+
+class ViewSort(BaseModel):
+    column_id: str
+    direction: str = "asc" # asc, desc
+
+class ViewFilter(BaseModel):
+    column_id: str
+    operator: str # equals, not_equals, contains, is_empty, is_not_empty
+    value: Any = None
+
+class ViewConfig(BaseModel):
+    id: str
+    name: str
+    type: str = "table" # table, kanban, gallery, list
+    group_by: Optional[str] = None
+    visible_columns: Optional[List[str]] = []
+    sorts: Optional[List[ViewSort]] = []
+    filters: Optional[List[ViewFilter]] = []
+
+class DatabaseRowBase(BaseModel):
+    properties: Dict[str, Any] = {}
+    content: Optional[str] = ""
+    content_json: Optional[str] = ""
+    order_index: Optional[float] = 0.0
+
+class DatabaseRowCreate(DatabaseRowBase):
+    pass
+
+class DatabaseRowUpdate(BaseModel):
+    properties: Optional[Dict[str, Any]] = None
+    content: Optional[str] = None
+    content_json: Optional[str] = None
+    order_index: Optional[float] = None
+
+class DatabaseRowOut(DatabaseRowBase):
+    id: str
+    database_id: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class DatabaseBase(BaseModel):
+    title: str = "未命名数据表"
+    icon: Optional[str] = "📊"
+    description: Optional[str] = ""
+    schema: List[ColumnSchema] = []
+    views: List[ViewConfig] = []
+    notebook_id: Optional[str] = None
+
+class DatabaseCreate(BaseModel):
+    title: str = "未命名数据表"
+    icon: Optional[str] = "📊"
+    description: Optional[str] = ""
+    schema: Optional[List[ColumnSchema]] = None
+    views: Optional[List[ViewConfig]] = None
+    notebook_id: Optional[str] = None
+
+class DatabaseUpdate(BaseModel):
+    title: Optional[str] = None
+    icon: Optional[str] = None
+    description: Optional[str] = None
+    schema: Optional[List[ColumnSchema]] = None
+    views: Optional[List[ViewConfig]] = None
+    notebook_id: Optional[str] = None
+
+class DatabaseOut(BaseModel):
+    id: str
+    title: str
+    icon: str
+    description: str
+    schema: List[ColumnSchema]
+    views: List[ViewConfig]
+    notebook_id: Optional[str]
+    rows: List[DatabaseRowOut] = []
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 
 

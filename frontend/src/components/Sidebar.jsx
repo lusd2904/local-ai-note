@@ -3,7 +3,7 @@ import {
   BookOpen, Folder, FolderPlus, Star, Trash2, Mic, 
   Settings, Moon, Sun, ChevronRight, ChevronDown, Plus, 
   Edit2, Check, X, CornerDownRight, Bot, Sparkles, ExternalLink, Globe,
-  ArrowRightLeft, Zap, Share2, Flame
+  ArrowRightLeft, Zap, Share2, Flame, Table
 } from 'lucide-react';
 
 // 将扁平笔记本数组转换为树形结构
@@ -215,6 +215,10 @@ export default function Sidebar({
   starredNotesCount,
   audioRecordsCount,
   memosCount = 0,
+  databases = [],
+  currentDatabaseId = null,
+  onSelectDatabase,
+  onCreateDatabase,
   onOpenSyncModal,
   onOpenGraphModal,
   onOpenHeatmapModal,
@@ -224,6 +228,7 @@ export default function Sidebar({
   const [modalParentId, setModalParentId] = useState('');
   const [modalName, setModalName] = useState('');
   const [notebooksExpanded, setNotebooksExpanded] = useState(true);
+  const [databasesExpanded, setDatabasesExpanded] = useState(true);
   const [aiSectionExpanded, setAiSectionExpanded] = useState(true);
 
   const notebookTree = buildTree(notebooks || []);
@@ -469,6 +474,67 @@ export default function Sidebar({
                 <span>Gemini</span>
               </div>
             </button>
+          </div>
+        )}
+
+        {/* 📊 多维数据表格 (Notion 数据库) */}
+        <div className="pt-4 pb-1">
+          <div className="flex items-center justify-between px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+            <div 
+              className="flex items-center space-x-1 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300"
+              onClick={() => setDatabasesExpanded(!databasesExpanded)}
+            >
+              {databasesExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              <span>📊 多维数据表</span>
+            </div>
+            
+            <button
+              onClick={() => {
+                const name = window.prompt('请输入新数据表名称:', '新数据表');
+                if (name && name.trim()) {
+                  onCreateDatabase(name.trim());
+                }
+              }}
+              style={{ WebkitAppRegion: 'no-drag' }}
+              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition text-blue-500 hover:text-blue-600 flex items-center space-x-0.5"
+              title="新建多维数据表"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {databasesExpanded && (
+          <div className="space-y-0.5">
+            {databases.length === 0 ? (
+              <div className="px-4 py-1.5 text-xs text-gray-400 italic">暂无数据表</div>
+            ) : (
+              databases.map((db) => {
+                const isSelected = currentView === 'database' && currentDatabaseId === db.id;
+                return (
+                  <button
+                    key={db.id}
+                    onClick={() => onSelectDatabase(db.id)}
+                    style={{ WebkitAppRegion: 'no-drag' }}
+                    className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      isSelected
+                        ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 font-semibold'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2 truncate">
+                      <span className="text-sm shrink-0">{db.icon || '📊'}</span>
+                      <span className="truncate">{db.title}</span>
+                    </div>
+                    {db.rows && db.rows.length > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500 font-mono shrink-0">
+                        {db.rows.length}
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            )}
           </div>
         )}
 

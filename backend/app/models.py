@@ -98,3 +98,39 @@ class Memo(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+
+class Database(Base):
+    """Notion 式多维数据库表模型"""
+    __tablename__ = "databases"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    title = Column(String(255), nullable=False, default="未命名数据表")
+    icon = Column(String(50), default="📊")
+    description = Column(Text, default="")
+    schema_json = Column(Text, default="[]")  # JSON: 列定义数组
+    views_json = Column(Text, default="[]")   # JSON: 视图定义数组 (表格、看板等)
+    notebook_id = Column(String(36), ForeignKey("notebooks.id"), nullable=True)
+    is_archived = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # 关联该数据库的所有行
+    rows = relationship("DatabaseRow", back_populates="database", cascade="all, delete-orphan", order_by="DatabaseRow.order_index")
+
+
+class DatabaseRow(Base):
+    """数据库行记录 (每行即一篇独立笔记页面)"""
+    __tablename__ = "database_rows"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    database_id = Column(String(36), ForeignKey("databases.id", ondelete="CASCADE"), nullable=False)
+    properties_json = Column(Text, default="{}") # JSON: 每列的值 { col_id: value }
+    content = Column(Text, default="")           # 该行展开后的富文本 Markdown 正文
+    content_json = Column(Text, default="")      # Tiptap JSON 格式
+    order_index = Column(Float, default=0.0)     # 排序权重
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    database = relationship("Database", back_populates="rows")
+
+

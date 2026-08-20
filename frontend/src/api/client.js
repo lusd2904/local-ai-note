@@ -176,5 +176,18 @@ export const updateMemo = (id, data) => api.put(`/memos/${id}`, data).then(res =
 export const deleteMemo = (id) => api.delete(`/memos/${id}`).then(res => res.data);
 export const convertMemosToNote = (data) => api.post('/memos/convert-to-note', data).then(res => res.data);
 
+// 多维数据表 (Databases)
+export const getDatabases = (params = {}) => api.get('/databases', { params }).then(res => res.data);
+export const getDatabase = (id) => api.get(`/databases/${id}`).then(res => res.data);
+export const createDatabase = (data = {}, createSamples = true) => api.post('/databases', data, { params: { create_samples: createSamples } }).then(res => res.data);
+export const updateDatabase = (id, data) => api.put(`/databases/${id}`, data).then(res => res.data);
+export const deleteDatabase = (id, permanent = false) => api.delete(`/databases/${id}`, { params: { permanent } }).then(res => res.data);
+
+// 数据行记录 (Rows)
+export const createDatabaseRow = (databaseId, data = {}) => api.post(`/databases/${databaseId}/rows`, data).then(res => res.data);
+export const updateDatabaseRow = (databaseId, rowId, data) => api.put(`/databases/${databaseId}/rows/${rowId}`, data).then(res => res.data);
+export const deleteDatabaseRow = (databaseId, rowId) => api.delete(`/databases/${databaseId}/rows/${rowId}`).then(res => res.data);
+
 export default api;
+
 
