@@ -1,9 +1,11 @@
+import os
+import io
 import json
 import secrets
 import hashlib
 import re
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, desc
 from ..database import get_db
@@ -13,6 +15,43 @@ from ..schemas import (
     NoteLockRequest, NoteUnlockRequest, NoteVerifyPasswordRequest,
     GraphDataOut, GraphNode, GraphLink, BacklinksOut, BacklinkItem
 )
+
+def decode_text_bytes(content_bytes: bytes) -> str:
+    for encoding in ['utf-8', 'utf-8-sig', 'gb18030', 'gbk', 'big5', 'latin1']:
+        try:
+            return content_bytes.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return content_bytes.decode('utf-8', errors='ignore')
+
+def extract_content_from_file(filename: str, content_bytes: bytes) -> str:
+    ext = os.path.splitext(filename)[1].lower()
+    
+    if ext == '.docx':
+        try:
+            import docx
+            doc = docx.Document(io.BytesIO(content_bytes))
+            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = [cell.text.strip() for cell in row.cells]
+                    paragraphs.append(" | ".join(row_text))
+            return "\n\n".join(paragraphs)
+        except Exception as e:
+            pass
+            
+    if ext in ['.html', '.htm']:
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(content_bytes, 'html.parser')
+            for s in soup(['script', 'style']):
+                s.extract()
+            return soup.get_text(separator='\n\n', strip=True)
+        except Exception as e:
+            pass
+
+    return decode_text_bytes(content_bytes)
+
 
 # PBKDF2 迭代次数（OWASP 2023 推荐：PBKDF2-HMAC-SHA256 至少 600,000 次）
 PBKDF2_ITERATIONS = 600000
@@ -481,16 +520,19 @@ def clone_note(note_id: str, db: Session = Depends(get_db)):
     }
 
 @router.post("/batch-import", response_model=List[NoteOut])
-async def batch_import(files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
+async def batch_import(
+    files: List[UploadFile] = File(...),
+    notebook_id: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
     """
-    批量导入 Markdown 或 TXT 文件
+    批量导入 Markdown、Word (.docx)、HTML 或各类纯文本文件
     安全限制：
     - 单次最多 100 个文件
-    - 单文件最大 10MB
-    - 仅支持 .md 和 .txt 扩展名
+    - 单文件最大 20MB
     """
     MAX_FILES = 100
-    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
 
     if len(files) > MAX_FILES:
         raise HTTPException(
@@ -500,24 +542,26 @@ async def batch_import(files: List[UploadFile] = File(...), db: Session = Depend
 
     created_notes = []
     for file in files:
-        if not file.filename.endswith(('.md', '.txt')):
-            continue
+        filename = file.filename or "未命名笔记.txt"
+        base_name, ext = os.path.splitext(filename)
+        title = base_name.strip() or "未命名导入笔记"
 
         content_bytes = await file.read()
 
-        # 验证文件大小
-        if len(content_bytes) > MAX_FILE_SIZE:
-            continue  # 跳过超大文件
+        # 验证文件大小与有效性
+        if len(content_bytes) > MAX_FILE_SIZE or len(content_bytes) == 0:
+            continue
 
-        content = content_bytes.decode('utf-8', errors='ignore')
-        title = os.path.splitext(file.filename)[0]
-        
+        content = extract_content_from_file(filename, content_bytes)
+        if not content.strip():
+            content = "（导入的文件无文本内容）"
+
         new_note = Note(
             title=title,
             content=content,
             content_json="",
-            notebook_id=None,
-            summary="",
+            notebook_id=notebook_id if (notebook_id and notebook_id.strip()) else None,
+            summary=content[:120].replace('\n', ' ') if content else "",
             tags="[]",
             is_starred=False,
             is_trashed=False,
@@ -526,7 +570,7 @@ async def batch_import(files: List[UploadFile] = File(...), db: Session = Depend
         db.add(new_note)
         db.commit()
         db.refresh(new_note)
-        
+
         created_notes.append({
             "id": new_note.id,
             "title": new_note.title,

@@ -155,10 +155,13 @@ export const unlockNote = (id, password) => api.post(`/notes/${id}/unlock`, { pa
 
 // 笔记克隆与批量导入
 export const cloneNote = (id) => api.post(`/notes/${id}/clone`).then(res => res.data);
-export const batchImportNotes = (files) => {
+export const batchImportNotes = (files, notebookId = null) => {
   const formData = new FormData();
   for (let i = 0; i < files.length; i++) {
     formData.append('files', files[i]);
+  }
+  if (notebookId) {
+    formData.append('notebook_id', notebookId);
   }
   return api.post('/notes/batch-import', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }

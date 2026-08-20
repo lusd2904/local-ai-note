@@ -445,10 +445,18 @@ export default function App() {
 
   const handleBatchImport = async (files) => {
     try {
-      const res = await batchImportNotes(files);
-      await fetchNotes();
-      alert(`成功导入 ${res.count || files.length} 篇笔记`);
-      // 可以在这里选中第一篇导入的笔记
+      const targetNotebookId = (currentView === 'notebook' && currentNotebookId) ? currentNotebookId : null;
+      const res = await batchImportNotes(files, targetNotebookId);
+      if (Array.isArray(res) && res.length > 0) {
+        if (['database', 'memos', 'audio_studio', 'trash'].includes(currentView)) {
+          setCurrentView(targetNotebookId ? 'notebook' : 'all');
+        }
+        await fetchNotes();
+        handleSelectNote(res[0].id);
+        alert(`🎉 成功导入 ${res.length} 篇笔记！已自动为您打开。`);
+      } else {
+        alert('未能从所选文件中解析出有效文本内容，请确认文件格式为 Markdown、Word (.docx)、HTML 或 TXT 文档。');
+      }
     } catch (err) {
       alert('批量导入失败: ' + err.message);
     }
