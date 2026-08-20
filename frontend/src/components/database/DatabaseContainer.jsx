@@ -420,6 +420,7 @@ export default function DatabaseContainer({
         row={selectedRow}
         onUpdateRow={handleUpdateRow}
         onDeleteRow={handleDeleteRow}
+        onUpdateSchema={handleUpdateSchema}
       />
     </div>
   );

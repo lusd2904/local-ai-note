@@ -182,7 +182,7 @@ export const convertMemosToNote = (data) => api.post('/memos/convert-to-note', d
 // 多维数据表 (Databases)
 export const getDatabases = (params = {}) => api.get('/databases', { params }).then(res => res.data);
 export const getDatabase = (id) => api.get(`/databases/${id}`).then(res => res.data);
-export const createDatabase = (data = {}, createSamples = true) => api.post('/databases', data, { params: { create_samples: createSamples } }).then(res => res.data);
+export const createDatabase = (data = {}, createSamples = false) => api.post('/databases', data, { params: { create_samples: createSamples } }).then(res => res.data);
 export const updateDatabase = (id, data) => api.put(`/databases/${id}`, data).then(res => res.data);
 export const deleteDatabase = (id, permanent = false) => api.delete(`/databases/${id}`, { params: { permanent } }).then(res => res.data);
 export const restoreDatabase = (id) => api.post(`/databases/${id}/restore`).then(res => res.data);

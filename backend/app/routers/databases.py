@@ -183,7 +183,7 @@ def get_databases(
 @router.post("", response_model=DatabaseOut, status_code=status.HTTP_201_CREATED)
 def create_database(
     db_in: DatabaseCreate,
-    create_samples: bool = Query(True, description="是否初始化示例数据行"),
+    create_samples: bool = Query(False, description="是否初始化示例数据行（默认为 False 创建空表）"),
     db: Session = Depends(get_db)
 ):
     """创建新数据表"""

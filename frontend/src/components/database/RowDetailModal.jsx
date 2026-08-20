@@ -4,17 +4,7 @@ import {
   Tag, CheckSquare, Hash, AlignLeft, Layers, 
   Sparkles, Check, Clock, ChevronDown, Plus
 } from 'lucide-react';
-
-const STATUS_COLORS = {
-  gray: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700',
-  blue: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700',
-  green: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700',
-  red: 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-700',
-  amber: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700',
-  purple: 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700',
-  pink: 'bg-pink-100 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300 border-pink-300 dark:border-pink-700',
-  slate: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700',
-};
+import TagOptionSelector, { STATUS_COLORS } from './TagOptionSelector';
 
 export default function RowDetailModal({
   isOpen,
@@ -22,7 +12,8 @@ export default function RowDetailModal({
   database,
   row,
   onUpdateRow,
-  onDeleteRow
+  onDeleteRow,
+  onUpdateSchema
 }) {
   if (!isOpen || !row) return null;
 
@@ -159,23 +150,14 @@ export default function RowDetailModal({
                           </button>
 
                           {openDropdownCol === col.id && (
-                            <div className="absolute top-full left-0 mt-1.5 w-44 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-30 animate-fadeIn">
-                              {col.options?.map(opt => (
-                                <button
-                                  key={opt.id}
-                                  onClick={() => {
-                                    handlePropertyChange(col.id, opt.id);
-                                    setOpenDropdownCol(null);
-                                  }}
-                                  className="w-full px-3 py-1.5 text-left text-xs flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-                                >
-                                  <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${STATUS_COLORS[opt.color]}`}>
-                                    {opt.name}
-                                  </span>
-                                  {val === opt.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
-                                </button>
-                              ))}
-                            </div>
+                            <TagOptionSelector
+                              col={col}
+                              value={val}
+                              onChange={(newVal) => handlePropertyChange(col.id, newVal)}
+                              onUpdateSchema={onUpdateSchema}
+                              database={database}
+                              onClose={() => setOpenDropdownCol(null)}
+                            />
                           )}
                         </div>
                       )}
@@ -194,30 +176,21 @@ export default function RowDetailModal({
                           </button>
 
                           {openDropdownCol === col.id && (
-                            <div className="absolute top-full left-0 mt-1.5 w-44 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-30 animate-fadeIn">
-                              {col.options?.map(opt => (
-                                <button
-                                  key={opt.id}
-                                  onClick={() => {
-                                    handlePropertyChange(col.id, opt.id);
-                                    setOpenDropdownCol(null);
-                                  }}
-                                  className="w-full px-3 py-1.5 text-left text-xs flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-                                >
-                                  <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${STATUS_COLORS[opt.color]}`}>
-                                    {opt.name}
-                                  </span>
-                                  {val === opt.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
-                                </button>
-                              ))}
-                            </div>
+                            <TagOptionSelector
+                              col={col}
+                              value={val}
+                              onChange={(newVal) => handlePropertyChange(col.id, newVal)}
+                              onUpdateSchema={onUpdateSchema}
+                              database={database}
+                              onClose={() => setOpenDropdownCol(null)}
+                            />
                           )}
                         </div>
                       )}
 
                       {/* 3. 多选 (Multi-Select) */}
                       {col.type === 'multi_select' && (
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="relative flex flex-wrap items-center gap-1.5">
                           {(Array.isArray(val) ? val : []).map(tagId => {
                             const opt = col.options?.find(o => o.id === tagId);
                             return (
@@ -233,7 +206,7 @@ export default function RowDetailModal({
                                     const next = (val || []).filter(t => t !== tagId);
                                     handlePropertyChange(col.id, next);
                                   }}
-                                  className="hover:opacity-70"
+                                  className="hover:opacity-70 cursor-pointer"
                                 >
                                   <X className="w-3 h-3" />
                                 </button>
@@ -243,34 +216,21 @@ export default function RowDetailModal({
 
                           <button
                             onClick={() => setOpenDropdownCol(openDropdownCol === col.id ? null : col.id)}
-                            className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition"
-                            title="添加标签"
+                            className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition cursor-pointer"
+                            title="选择或自定义标签"
                           >
                             <Plus className="w-3.5 h-3.5" />
                           </button>
 
                           {openDropdownCol === col.id && (
-                            <div className="absolute top-full left-0 mt-1.5 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-30 animate-fadeIn">
-                              {col.options?.map(opt => {
-                                const isSelected = (val || []).includes(opt.id);
-                                return (
-                                  <button
-                                    key={opt.id}
-                                    onClick={() => {
-                                      const cur = Array.isArray(val) ? val : [];
-                                      const next = isSelected ? cur.filter(t => t !== opt.id) : [...cur, opt.id];
-                                      handlePropertyChange(col.id, next);
-                                    }}
-                                    className="w-full px-3 py-1.5 text-left text-xs flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-                                  >
-                                    <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${STATUS_COLORS[opt.color]}`}>
-                                      {opt.name}
-                                    </span>
-                                    {isSelected && <Check className="w-3.5 h-3.5 text-purple-500" />}
-                                  </button>
-                                );
-                              })}
-                            </div>
+                            <TagOptionSelector
+                              col={col}
+                              value={val}
+                              onChange={(newVal) => handlePropertyChange(col.id, newVal)}
+                              onUpdateSchema={onUpdateSchema}
+                              database={database}
+                              onClose={() => setOpenDropdownCol(null)}
+                            />
                           )}
                         </div>
                       )}
