@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Search, Plus, Star, Trash2, Mic,
-  Clock, FileText, RotateCcw, Lock
+  Clock, FileText, RotateCcw, Lock, Upload
 } from 'lucide-react';
 
 export default function NoteList({
@@ -13,6 +13,7 @@ export default function NoteList({
   onDeleteNote,
   onRestoreNote,
   onEmptyTrash,
+  onBatchImport,
   isTrashView = false,
   searchKeyword = '',
   onSearchChange,
@@ -69,21 +70,43 @@ export default function NoteList({
           <h2 className="text-base font-bold text-gray-800 dark:text-gray-100 truncate">
             {currentViewTitle}
           </h2>
-          <div className="flex items-center space-x-1" style={{ WebkitAppRegion: 'no-drag' }}>
+          <div className="flex items-center space-x-1.5" style={{ WebkitAppRegion: 'no-drag' }}>
             {!isTrashView ? (
-              <button
-                onClick={onCreateNote}
-                className="flex items-center space-x-1 px-2.5 py-1 bg-blue-500 hover:bg-blue-600 active:scale-95 text-white rounded-md text-xs font-semibold shadow-sm transition-all"
-                title="新建笔记"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>新建</span>
-              </button>
+              <>
+                <label 
+                  className="flex items-center space-x-1 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 active:scale-95 text-gray-700 dark:text-gray-200 rounded-md text-xs font-medium transition-all cursor-pointer shadow-2xs"
+                  title="批量导入本地 Markdown / TXT 笔记"
+                >
+                  <Upload className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>导入</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".md,.txt,.markdown"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        onBatchImport && onBatchImport(Array.from(e.target.files));
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                </label>
+
+                <button
+                  onClick={onCreateNote}
+                  className="flex items-center space-x-1 px-2.5 py-1 bg-blue-500 hover:bg-blue-600 active:scale-95 text-white rounded-md text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                  title="新建笔记"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>新建</span>
+                </button>
+              </>
             ) : (
               safeNotes.length > 0 && (
                 <button
                   onClick={onEmptyTrash}
-                  className="flex items-center space-x-1 px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 rounded-md text-xs font-medium transition"
+                  className="flex items-center space-x-1 px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 rounded-md text-xs font-medium transition cursor-pointer"
                 >
                   <Trash2 className="w-3 h-3" />
                   <span>清空废纸篓</span>

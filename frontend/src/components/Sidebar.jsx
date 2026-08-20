@@ -3,7 +3,7 @@ import {
   BookOpen, Folder, FolderPlus, Star, Trash2, Mic, 
   Settings, Moon, Sun, ChevronRight, ChevronDown, Plus, 
   Edit2, Check, X, CornerDownRight, Bot, Sparkles, ExternalLink, Globe,
-  ArrowRightLeft, Zap, Share2, Flame, Table
+  ArrowRightLeft, Zap, Share2, Flame, Table, Upload
 } from 'lucide-react';
 
 // 将扁平笔记本数组转换为树形结构
@@ -771,6 +771,27 @@ export default function Sidebar({
         </button>
 
         <div className="flex items-center space-x-1">
+          {/* 批量导入 Markdown / TXT 笔记 */}
+          <label 
+            style={{ WebkitAppRegion: 'no-drag' }}
+            className="p-1.5 text-gray-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-md transition cursor-pointer"
+            title="批量导入本地 Markdown / TXT 笔记"
+          >
+            <Upload className="w-4 h-4 text-indigo-500" />
+            <input
+              type="file"
+              multiple
+              accept=".md,.txt,.markdown"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  onBatchImport && onBatchImport(Array.from(e.target.files));
+                  e.target.value = '';
+                }
+              }}
+            />
+          </label>
+
           {/* 创作打卡热力图快捷入口 */}
           <button
             onClick={onOpenHeatmapModal}

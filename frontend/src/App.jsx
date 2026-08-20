@@ -583,6 +583,7 @@ export default function App() {
               onDeleteNote={handleDeleteNote}
               onRestoreNote={handleRestoreNote}
               onEmptyTrash={handleEmptyTrash}
+              onBatchImport={handleBatchImport}
               isTrashView={currentView === 'trash'}
               searchKeyword={searchKeyword}
               onSearchChange={setSearchKeyword}
