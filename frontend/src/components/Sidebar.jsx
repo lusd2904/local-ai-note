@@ -519,7 +519,7 @@ export default function Sidebar({
         </div>
 
         {databasesExpanded && (
-          <div className="space-y-0.5">
+          <div className="space-y-0.5 pl-3">
             {databases.length === 0 ? (
               <div className="px-4 py-1.5 text-xs text-gray-400 italic">暂无数据表</div>
             ) : (
@@ -530,7 +530,7 @@ export default function Sidebar({
                     key={db.id}
                     onClick={() => onSelectDatabase(db.id)}
                     style={{ WebkitAppRegion: 'no-drag' }}
-                    className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                       isSelected
                         ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 font-semibold'
                         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
