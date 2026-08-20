@@ -56,7 +56,7 @@ export default function TableView({
   };
 
   return (
-    <div className="w-full overflow-x-auto select-none">
+    <div className="w-full overflow-x-auto select-none min-h-[520px] pb-72">
       <table className="w-full border-collapse text-left text-xs min-w-[700px]">
         {/* 表头 (Headers) */}
         <thead>
@@ -139,7 +139,7 @@ export default function TableView({
         <tbody>
           {rows.map((row, index) => {
             const isHovered = hoveredRowId === row.id;
-            const isNearBottom = index >= rows.length - 2 && rows.length > 2;
+            const isNearBottom = rows.length > 3 && index >= rows.length - 2;
 
             return (
               <tr
@@ -164,9 +164,10 @@ export default function TableView({
                 </td>
 
                 {/* 各单元格 */}
-                {database.schema.map((col) => {
+                {database.schema.map((col, colIndex) => {
                   const val = row.properties?.[col.id];
                   const isTitle = col.type === 'title';
+                  const isRightSide = colIndex >= database.schema.length - 2;
 
                   return (
                     <td
@@ -220,6 +221,7 @@ export default function TableView({
                               database={database}
                               onClose={() => setActiveCellDropdown(null)}
                               isNearBottom={isNearBottom}
+                              align={isRightSide ? 'right' : 'left'}
                             />
                           )}
                         </div>
@@ -251,6 +253,7 @@ export default function TableView({
                               database={database}
                               onClose={() => setActiveCellDropdown(null)}
                               isNearBottom={isNearBottom}
+                              align={isRightSide ? 'right' : 'left'}
                             />
                           )}
                         </div>
@@ -294,6 +297,7 @@ export default function TableView({
                               database={database}
                               onClose={() => setActiveCellDropdown(null)}
                               isNearBottom={isNearBottom}
+                              align={isRightSide ? 'right' : 'left'}
                             />
                           )}
                         </div>
