@@ -234,6 +234,8 @@ export default function Sidebar({
   const [dbModalTitle, setDbModalTitle] = useState('');
   const [dbModalIcon, setDbModalIcon] = useState('📊');
 
+  const sidebarFileInputRef = React.useRef(null);
+
   const [notebooksExpanded, setNotebooksExpanded] = useState(true);
   const [databasesExpanded, setDatabasesExpanded] = useState(true);
   const [aiSectionExpanded, setAiSectionExpanded] = useState(true);
@@ -772,25 +774,28 @@ export default function Sidebar({
 
         <div className="flex items-center space-x-1">
           {/* 批量导入 Markdown / TXT 笔记 */}
-          <label 
+          <button 
+            type="button"
+            onClick={() => sidebarFileInputRef.current?.click()}
             style={{ WebkitAppRegion: 'no-drag' }}
             className="p-1.5 text-gray-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-md transition cursor-pointer"
             title="批量导入本地 Markdown / TXT 笔记"
           >
             <Upload className="w-4 h-4 text-indigo-500" />
-            <input
-              type="file"
-              multiple
-              accept=".md,.txt,.markdown"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files && e.target.files.length > 0) {
-                  onBatchImport && onBatchImport(Array.from(e.target.files));
-                  e.target.value = '';
-                }
-              }}
-            />
-          </label>
+          </button>
+          <input
+            ref={sidebarFileInputRef}
+            type="file"
+            multiple
+            accept=".md,.txt,.markdown"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                onBatchImport && onBatchImport(Array.from(e.target.files));
+                e.target.value = '';
+              }
+            }}
+          />
 
           {/* 创作打卡热力图快捷入口 */}
           <button

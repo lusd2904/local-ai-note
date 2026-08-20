@@ -19,6 +19,7 @@ export default function NoteList({
   onSearchChange,
   currentViewTitle = '全部笔记'
 }) {
+  const fileInputRef = React.useRef(null);
 
   const safeNotes = Array.isArray(notes) ? notes : [];
 
@@ -73,28 +74,33 @@ export default function NoteList({
           <div className="flex items-center space-x-1.5" style={{ WebkitAppRegion: 'no-drag' }}>
             {!isTrashView ? (
               <>
-                <label 
+                <button 
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ WebkitAppRegion: 'no-drag' }}
                   className="flex items-center space-x-1 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 active:scale-95 text-gray-700 dark:text-gray-200 rounded-md text-xs font-medium transition-all cursor-pointer shadow-2xs"
                   title="批量导入本地 Markdown / TXT 笔记"
                 >
                   <Upload className="w-3.5 h-3.5 text-indigo-500" />
                   <span>导入</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept=".md,.txt,.markdown"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        onBatchImport && onBatchImport(Array.from(e.target.files));
-                        e.target.value = '';
-                      }
-                    }}
-                  />
-                </label>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".md,.txt,.markdown"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      onBatchImport && onBatchImport(Array.from(e.target.files));
+                      e.target.value = '';
+                    }
+                  }}
+                />
 
                 <button
                   onClick={onCreateNote}
+                  style={{ WebkitAppRegion: 'no-drag' }}
                   className="flex items-center space-x-1 px-2.5 py-1 bg-blue-500 hover:bg-blue-600 active:scale-95 text-white rounded-md text-xs font-semibold shadow-xs transition-all cursor-pointer"
                   title="新建笔记"
                 >

@@ -216,6 +216,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
         }
     }
 
+    // 🌟 原生文件选择器支持 (解决 <input type="file"> 在 macOS WKWebView 中点击无反应)
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+        let openPanel = NSOpenPanel()
+        openPanel.canChooseFiles = true
+        openPanel.canChooseDirectories = parameters.allowsDirectories
+        openPanel.allowsMultipleSelection = parameters.allowsMultipleSelection
+
+        openPanel.begin { result in
+            if result == .OK {
+                completionHandler(openPanel.urls)
+            } else {
+                completionHandler(nil)
+            }
+        }
+    }
+
     // 🌟 登录授权弹窗：支持微信扫码、手机验证码等 OAuth 登录弹窗无缝完成授权并共享 Cookie
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         configuration.websiteDataStore = WKWebsiteDataStore.default()
