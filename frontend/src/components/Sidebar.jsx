@@ -219,6 +219,7 @@ export default function Sidebar({
   currentDatabaseId = null,
   onSelectDatabase,
   onCreateDatabase,
+  onDeleteDatabase,
   onOpenSyncModal,
   onOpenGraphModal,
   onOpenHeatmapModal,
@@ -526,28 +527,46 @@ export default function Sidebar({
               databases.map((db) => {
                 const isSelected = currentView === 'database' && currentDatabaseId === db.id;
                 return (
-                  <button
+                  <div
                     key={db.id}
                     onClick={() => onSelectDatabase(db.id)}
                     style={{ WebkitAppRegion: 'no-drag' }}
-                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    className={`w-full group flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 font-semibold'
                         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
                     }`}
                   >
-                    <div className="flex items-center space-x-2 truncate">
+                    <div className="flex items-center space-x-2 truncate flex-1 min-w-0">
                       <span className="text-sm shrink-0">{db.icon || '📊'}</span>
                       <span className="truncate">
                         {db.title && db.icon && db.title.startsWith(db.icon) ? db.title.replace(db.icon, '').trim() : (db.title || '未命名数据表')}
                       </span>
                     </div>
-                    {db.rows && db.rows.length > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500 font-mono shrink-0">
-                        {db.rows.length}
-                      </span>
-                    )}
-                  </button>
+
+                    <div className="flex items-center space-x-1 shrink-0 ml-1.5">
+                      {db.rows && db.rows.length > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500 font-mono group-hover:hidden">
+                          {db.rows.length}
+                        </span>
+                      )}
+                      {onDeleteDatabase && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`确定要将数据表「${db.title}」移入废纸篓吗？`)) {
+                              onDeleteDatabase(db.id);
+                            }
+                          }}
+                          className="hidden group-hover:flex p-1 text-gray-400 hover:text-red-500 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition"
+                          title="移入废纸篓"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 );
               })
             )}

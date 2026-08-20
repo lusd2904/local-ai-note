@@ -19,7 +19,7 @@ import {
   getNotes, getNote, createNote, updateNote, deleteNote, restoreNote, emptyTrash,
   getAudioRecords, analyzeContent, lockNote, unlockNote, verifyNotePassword,
   cloneNote, batchImportNotes, getMemos,
-  getDatabases, createDatabase
+  getDatabases, createDatabase, deleteDatabase, restoreDatabase
 } from './api/client';
 import { localDb } from './services/localDb';
 
@@ -63,9 +63,8 @@ export default function App() {
 
   const fetchDatabases = async () => {
     try {
-      const list = await getDatabases();
+      const list = await getDatabases({ is_archived: false });
       setDatabases(list || []);
-      // 若当前没有选中的数据库且列表非空，可在点击时选择
     } catch (err) {
       console.warn('Failed to fetch databases:', err);
     }
@@ -82,12 +81,31 @@ export default function App() {
     }
   };
 
-  const handleDatabaseDeleted = async (deletedId) => {
-    await fetchDatabases();
+  // 移入废纸篓 (支持立即乐观更新消除延迟)
+  const handleDeleteDatabase = async (deletedId) => {
+    setDatabases(prev => prev.filter(db => db.id !== deletedId));
     if (currentDatabaseId === deletedId) {
       setCurrentDatabaseId(null);
       setCurrentView('all');
     }
+    try {
+      await deleteDatabase(deletedId);
+      await fetchDatabases();
+      await fetchNotes();
+    } catch (err) {
+      alert('移入废纸篓失败: ' + err.message);
+      await fetchDatabases();
+    }
+  };
+
+  const handleDatabaseDeleted = async (deletedId) => {
+    setDatabases(prev => prev.filter(db => db.id !== deletedId));
+    if (currentDatabaseId === deletedId) {
+      setCurrentDatabaseId(null);
+      setCurrentView('all');
+    }
+    await fetchDatabases();
+    await fetchNotes();
   };
 
   const fetchMemos = async () => {
@@ -172,7 +190,29 @@ export default function App() {
       }
 
       const noteList = await getNotes(params);
-      const safeNoteList = Array.isArray(noteList) ? noteList : [];
+      let safeNoteList = Array.isArray(noteList) ? noteList : [];
+
+      // 获取已归档/废纸篓数据表
+      let trashedDbs = [];
+      try {
+        trashedDbs = await getDatabases({ is_archived: true });
+      } catch (e) {
+        console.warn('Failed to fetch trashed databases:', e);
+      }
+
+      const formattedTrashedDbs = (trashedDbs || []).map(db => ({
+        id: db.id,
+        title: `${db.icon || '📊'} ${db.title}`,
+        content: db.description || `多维数据表 (包含 ${db.rows?.length || 0} 条记录)`,
+        updated_at: db.updated_at,
+        is_database: true,
+        is_trashed: true,
+        tags: ['多维数据表']
+      }));
+
+      if (currentView === 'trash') {
+        safeNoteList = [...safeNoteList, ...formattedTrashedDbs];
+      }
       setNotes(safeNoteList);
 
       // 同步选中第一篇笔记
@@ -188,8 +228,10 @@ export default function App() {
       const allNotes = await getNotes({ is_trashed: false });
       const trashed = await getNotes({ is_trashed: true });
       const starred = (Array.isArray(allNotes) ? allNotes : []).filter(n => n.is_starred);
+      const totalTrashedCount = (Array.isArray(trashed) ? trashed.length : 0) + (trashedDbs ? trashedDbs.length : 0);
+
       setTotalCount(Array.isArray(allNotes) ? allNotes.length : 0);
-      setTrashCount(Array.isArray(trashed) ? trashed.length : 0);
+      setTrashCount(totalTrashedCount);
       setStarredCount(starred.length);
 
       // 刷新笔记本数据以更新各笔记本 note_count
@@ -310,25 +352,38 @@ export default function App() {
 
   const handleDeleteNote = async (id, permanent = false) => {
     try {
-      await deleteNote(id, permanent);
+      const target = notes.find(n => n.id === id);
+      if (target?.is_database) {
+        await deleteDatabase(id, permanent);
+        await fetchDatabases();
+      } else {
+        await deleteNote(id, permanent);
+      }
       await fetchNotes();
     } catch (err) {
-      alert('删除笔记失败: ' + err.message);
+      alert('删除失败: ' + err.message);
     }
   };
 
   const handleRestoreNote = async (id) => {
     try {
-      await restoreNote(id);
+      const target = notes.find(n => n.id === id);
+      if (target?.is_database) {
+        await restoreDatabase(id);
+        await fetchDatabases();
+      } else {
+        await restoreNote(id);
+      }
       await fetchNotes();
     } catch (err) {
-      alert('恢复笔记失败: ' + err.message);
+      alert('恢复失败: ' + err.message);
     }
   };
 
   const handleEmptyTrash = async () => {
     try {
       await emptyTrash();
+      await fetchDatabases();
       await fetchNotes();
     } catch (err) {
       alert('清空废纸篓失败: ' + err.message);
@@ -461,6 +516,7 @@ export default function App() {
             setCurrentView('database');
           }}
           onCreateDatabase={handleCreateDatabase}
+          onDeleteDatabase={handleDeleteDatabase}
           onOpenSyncModal={() => setIsSyncModalOpen(true)}
           onOpenGraphModal={() => setIsGraphModalOpen(true)}
           onOpenHeatmapModal={() => setIsHeatmapModalOpen(true)}

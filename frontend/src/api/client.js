@@ -182,6 +182,8 @@ export const getDatabase = (id) => api.get(`/databases/${id}`).then(res => res.d
 export const createDatabase = (data = {}, createSamples = true) => api.post('/databases', data, { params: { create_samples: createSamples } }).then(res => res.data);
 export const updateDatabase = (id, data) => api.put(`/databases/${id}`, data).then(res => res.data);
 export const deleteDatabase = (id, permanent = false) => api.delete(`/databases/${id}`, { params: { permanent } }).then(res => res.data);
+export const restoreDatabase = (id) => api.post(`/databases/${id}/restore`).then(res => res.data);
+
 
 // 数据行记录 (Rows)
 export const createDatabaseRow = (databaseId, data = {}) => api.post(`/databases/${databaseId}/rows`, data).then(res => res.data);

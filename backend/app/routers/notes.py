@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, desc
 from ..database import get_db
-from ..models import Note, Notebook, AudioRecord
+from ..models import Note, Notebook, AudioRecord, Database
 from ..schemas import (
     NoteCreate, NoteUpdate, NoteOut,
     NoteLockRequest, NoteUnlockRequest, NoteVerifyPasswordRequest,
@@ -373,8 +373,9 @@ def restore_note(note_id: str, db: Session = Depends(get_db)):
 
 @router.delete("/trash/empty")
 def empty_trash(db: Session = Depends(get_db)):
-    """清空废纸篓"""
+    """清空废纸篓 (包括笔记与多维数据表)"""
     db.query(Note).filter(Note.is_trashed == True).delete()
+    db.query(Database).filter(Database.is_archived == True).delete()
     db.commit()
     return {"status": "success", "message": "Trash emptied successfully"}
 

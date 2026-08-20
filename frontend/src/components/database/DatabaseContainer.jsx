@@ -245,14 +245,20 @@ export default function DatabaseContainer({
           {/* 右侧全局操作 */}
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => {
-                if (window.confirm(`确定要删除数据表「${database.title}」吗？`)) {
-                  deleteDatabase(database.id);
-                  if (onDatabaseDeleted) onDatabaseDeleted(database.id);
+              onClick={async () => {
+                if (window.confirm(`确定要将数据表「${database.title}」移入废纸篓吗？`)) {
+                  try {
+                    await deleteDatabase(database.id);
+                    if (onDatabaseDeleted) {
+                      await onDatabaseDeleted(database.id);
+                    }
+                  } catch (err) {
+                    alert('删除数据表失败: ' + err.message);
+                  }
                 }
               }}
-              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition"
-              title="删除数据表"
+              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition cursor-pointer"
+              title="删除数据表并移入废纸篓"
             >
               <Trash2 className="w-4 h-4" />
             </button>

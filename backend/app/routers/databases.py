@@ -168,14 +168,16 @@ def _serialize_database_out(db_item: Database) -> dict:
 @router.get("", response_model=List[DatabaseOut])
 def get_databases(
     notebook_id: Optional[str] = None,
+    is_archived: bool = Query(False, description="是否获取已删除/归档的数据表"),
     db: Session = Depends(get_db)
 ):
-    """获取所有未归档的数据表"""
-    query = db.query(Database).filter(Database.is_archived == False)
+    """获取数据表列表 (默认获取活跃表，is_archived=True 时获取废纸篓表)"""
+    query = db.query(Database).filter(Database.is_archived == is_archived)
     if notebook_id:
         query = query.filter(Database.notebook_id == notebook_id)
     databases = query.order_by(Database.created_at.asc()).all()
     return [_serialize_database_out(d) for d in databases]
+
 
 
 @router.post("", response_model=DatabaseOut, status_code=status.HTTP_201_CREATED)
@@ -265,6 +267,20 @@ def delete_database(id: str, permanent: bool = Query(False), db: Session = Depen
         db_item.updated_at = datetime.utcnow()
     db.commit()
     return None
+
+
+@router.post("/{id}/restore", response_model=DatabaseOut)
+def restore_database(id: str, db: Session = Depends(get_db)):
+    """恢复已删除/归档的数据表"""
+    db_item = db.query(Database).filter(Database.id == id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="数据表不存在")
+    db_item.is_archived = False
+    db_item.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(db_item)
+    return _serialize_database_out(db_item)
+
 
 
 # ----------------- 数据行 (Rows / Records) 操作 -----------------
