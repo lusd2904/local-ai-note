@@ -60,6 +60,58 @@ function parseNoteContent(note) {
   return markdownToRichHTML(note.content || '');
 }
 
+/**
+ * 🌟 万能 AI 标签提取解析器：
+ * 兼容标准 JSON 数组、Markdown 代码块、#标签、列表格式、顿号逗号分隔等多种输出形式
+ */
+export function parseTagsFromAIResponse(resText) {
+  if (!resText || typeof resText !== 'string') return [];
+  const text = resText.trim();
+  
+  // 1. 尝试直接从文本中提取 JSON 数组 [ ... ]
+  const jsonMatch = text.match(/\[[\s\S]*?\]/);
+  if (jsonMatch) {
+    try {
+      const normalizedJson = jsonMatch[0].replace(/'/g, '"');
+      const parsed = JSON.parse(normalizedJson);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map(t => String(t).replace(/^[#\s]+/, '').trim()).filter(Boolean);
+      }
+    } catch (e) {}
+  }
+
+  // 2. 尝试提取 #标签 格式
+  const hashTags = text.match(/#([\w\u4e00-\u9fa5\-]+)/g);
+  if (hashTags && hashTags.length > 0) {
+    return hashTags.map(t => t.replace(/^#/, '').trim()).filter(Boolean);
+  }
+
+  // 3. 尝试提取列表格式 (如 1. 标签 或 - 标签 或 • 标签)
+  const listItems = text.split('\n')
+    .map(line => line.replace(/^[\s*\-•\d\.\、]+/, '').trim())
+    .map(line => line.replace(/^["'“”‘’]|["'“”‘’]$/g, '').trim())
+    .filter(line => line && line.length <= 20 && !line.includes('：') && !line.includes(':') && !line.includes('如下'));
+  if (listItems.length > 1) {
+    return listItems.slice(0, 6);
+  }
+
+  // 4. 尝试顿号/逗号分隔 (如 标签1、标签2、标签3)
+  if (text.includes('、') || text.includes(',')) {
+    const splitTags = text.split(/[、,，\n]+/)
+      .map(t => t.replace(/^[\s*\-•\d\.\、"']+|["'“”‘’]$/g, '').trim())
+      .filter(t => t && t.length <= 20 && !t.includes('如下'));
+    if (splitTags.length > 0) {
+      return splitTags.slice(0, 6);
+    }
+  }
+
+  if (listItems.length === 1) {
+    return listItems;
+  }
+
+  return [];
+}
+
 // 🌟 空状态占位视图（当没有选中笔记时显示，无需初始化 Tiptap 引擎）
 function EmptyEditor() {
   return (
@@ -149,6 +201,11 @@ function EditorCore({
   const [isAIAnalyzing, setIsAIAnalyzing] = useState(false);
   const [aiActionTip, setAiActionTip] = useState('');
   const [exportSuccessTip, setExportSuccessTip] = useState(false);
+
+  // 🌟 当外部切换笔记或更新标签时保持内部 tags 状态同步
+  useEffect(() => {
+    setTags(getInitialTags());
+  }, [note?.id, note?.tags]);
   
   // 🌟 下拉菜单交互状态
   const [showTableMenu, setShowTableMenu] = useState(false);
@@ -441,19 +498,17 @@ function EditorCore({
           if (!resText || !editor || editor.isDestroyed) return;
 
           if (action === 'extract_tags') {
-            try {
-              let cleaned = resText;
-              if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
-              if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
-              if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
-              const parsed = JSON.parse(cleaned.trim());
-              if (Array.isArray(parsed)) {
-                const merged = Array.from(new Set([...tags, ...parsed]));
-                setTags(merged);
-                if (onUpdateNote) onUpdateNote(note.id, { tags: merged });
-              }
-            } catch (e) {
-              console.error('Failed to parse tags:', e);
+            const parsed = parseTagsFromAIResponse(resText);
+            if (parsed && parsed.length > 0) {
+              const currentTags = getInitialTags();
+              const merged = Array.from(new Set([...currentTags, ...parsed]));
+              setTags(merged);
+              if (onUpdateNote) onUpdateNote(note.id, { tags: merged });
+              setAiActionTip(`✅ 已提炼并关联 ${parsed.length} 个新标签：${parsed.join('、')}`);
+              setTimeout(() => setAiActionTip(''), 4000);
+            } else {
+              setAiActionTip(`⚠️ 未能从 AI 返回结果中解析出标签`);
+              setTimeout(() => setAiActionTip(''), 4000);
             }
           } else if (action === 'expand') {
             editor.commands.setContent(markdownToRichHTML(resText));
