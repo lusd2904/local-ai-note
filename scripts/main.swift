@@ -262,6 +262,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
                 if action == "sidebarWidth", let width = dict["width"] as? Double {
                     self.sidebarWidth = CGFloat(width)
                     self.layoutEmbedded()
+                } else if action == "dragWindow" {
+                    if let event = NSApp.currentEvent {
+                        if event.clickCount == 2 {
+                            self.window.zoom(nil)
+                        } else {
+                            self.window.performDrag(with: event)
+                        }
+                    }
                 }
                 return
             }
