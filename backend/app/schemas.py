@@ -138,6 +138,7 @@ class AISettingOut(BaseModel):
     provider: Optional[str] = "claude"
     api_key: Optional[str] = ""
     api_key_masked: Optional[str] = ""
+    api_key_configured: Optional[bool] = False
     base_url: str
     model_name: str
     reasoning_effort: Optional[str] = "medium"

@@ -14,18 +14,29 @@ def get_ai_config(db: Session) -> Dict[str, Any]:
     ai_setting = db.query(AISetting).filter(AISetting.id == "default").first()
     if ai_setting:
         active_p = ai_setting.active_provider or ai_setting.provider or "claude"
-        
+        if active_p in ("openai", "deepseek"):
+            active_p = "grok"
+
+        defaults = {
+            "claude": ("https://api.anthropic.com/v1", "claude-3-7-sonnet-20250219"),
+            "grok": ("https://api.x.ai/v1", "grok-3"),
+            "ollama": ("http://localhost:11434/v1", "qwen2.5:7b"),
+        }
+        default_url, default_model = defaults.get(active_p, defaults["grok"])
+
         # 尝试从多渠道字典中读取
         if ai_setting.providers_config:
             try:
                 p_map = json.loads(ai_setting.providers_config)
-                if active_p in p_map and isinstance(p_map[active_p], dict):
-                    cfg = p_map[active_p]
+                cfg = p_map.get(active_p) if isinstance(p_map.get(active_p), dict) else None
+                if not cfg and active_p == "grok":
+                    cfg = p_map.get("openai") if isinstance(p_map.get("openai"), dict) else p_map.get("deepseek")
+                if isinstance(cfg, dict):
                     return {
                         "provider": active_p,
                         "api_key": cfg.get("api_key") or ("ollama" if active_p == "ollama" else ""),
-                        "base_url": cfg.get("base_url") or ("https://api.anthropic.com/v1" if active_p == "claude" else "https://api.openai.com/v1"),
-                        "model_name": cfg.get("model_name") or ("claude-3-7-sonnet-20250219" if active_p == "claude" else "gpt-4o"),
+                        "base_url": cfg.get("base_url") or default_url,
+                        "model_name": cfg.get("model_name") or default_model,
                         "reasoning_effort": cfg.get("reasoning_effort") or ai_setting.reasoning_effort or "medium",
                         "whisper_model": ai_setting.whisper_model or "whisper-1",
                         "temperature": cfg.get("temperature", 0.7)
@@ -303,8 +314,8 @@ class AIService:
 
         if not config["api_key"] and "localhost" not in config["base_url"] and "127.0.0.1" not in config["base_url"]:
             yield (
-                "【提示】当前尚未配置 AI API Key。请点击左下角「AI 与偏好设置」填入您的 API Key "
-                "（支持 Claude Code / Anthropic, DeepSeek, OpenAI 或本地 Ollama 免费离线模型）。"
+                "【提示】当前尚未配置 AI API Key。请点击左下角「设置」填入您的 API Key "
+                "（支持 Grok / xAI、Claude 或本地 Ollama）。"
             )
             return
 

@@ -46,6 +46,8 @@ export default function App() {
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const restoreNoteIdRef = useRef(loadPref('lastNoteId', null));
   const didRestoreRef = useRef(false);
+  const currentNoteRef = useRef(null);
+  currentNoteRef.current = currentNote;
 
   // 统计数据
   const [totalCount, setTotalCount] = useState(0);
@@ -253,13 +255,13 @@ export default function App() {
       if (safeNoteList.length > 0) {
         const restoreId = !didRestoreRef.current ? restoreNoteIdRef.current : null;
         didRestoreRef.current = true;
-        const currentId = currentNote?.id;
+        const currentId = currentNoteRef.current?.id;
         if (restoreId && safeNoteList.some(n => n.id === restoreId)) {
-          handleSelectNote(restoreId);
+          if (currentId !== restoreId) handleSelectNote(restoreId);
         } else if (!currentId || !safeNoteList.some(n => n.id === currentId)) {
           handleSelectNote(safeNoteList[0].id);
         }
-      } else {
+      } else if (currentNoteRef.current) {
         setCurrentNote(null);
       }
 
@@ -335,8 +337,12 @@ export default function App() {
   // 笔记 CRUD
   const handleSelectNote = async (id) => {
     try {
-      if (typeof window.__noteFlushSave === 'function') {
-        await window.__noteFlushSave();
+      const alreadyOpen = currentNoteRef.current?.id === id && currentNoteRef.current?.content_json;
+      if (alreadyOpen) return;
+      if (currentNoteRef.current?.id && currentNoteRef.current.id !== id) {
+        if (typeof window.__noteFlushSave === 'function') {
+          await window.__noteFlushSave();
+        }
       }
       if (unlockedNotesCache[id]) {
         setCurrentNote(unlockedNotesCache[id]);
@@ -367,10 +373,29 @@ export default function App() {
   const handleUpdateNote = async (id, data) => {
     try {
       const updated = await updateNote(id, data);
-      setNotes(prev => prev.map(n => n.id === id ? { ...n, ...updated, content_json: undefined } : n));
-      if (currentNote?.id === id) {
-        setCurrentNote(prev => ({ ...prev, ...updated }));
-      }
+      setNotes(prev => prev.map(n => n.id === id ? {
+        ...n,
+        title: updated.title,
+        summary: updated.summary,
+        tags: updated.tags,
+        notebook_id: updated.notebook_id,
+        is_starred: updated.is_starred,
+        updated_at: updated.updated_at,
+        content: updated.summary || n.content,
+        content_length: typeof updated.content_length === 'number' ? updated.content_length : n.content_length
+      } : n));
+      setCurrentNote(prev => {
+        if (!prev || prev.id !== id) return prev;
+        return {
+          ...prev,
+          title: data.title !== undefined ? updated.title : prev.title,
+          tags: data.tags !== undefined ? updated.tags : prev.tags,
+          notebook_id: data.notebook_id !== undefined ? updated.notebook_id : prev.notebook_id,
+          is_starred: data.is_starred !== undefined ? updated.is_starred : prev.is_starred,
+          summary: data.summary !== undefined ? updated.summary : prev.summary,
+          is_locked: data.is_locked !== undefined ? updated.is_locked : prev.is_locked
+        };
+      });
       setUnlockedNotesCache(prev => {
         if (prev[id]) {
           return { ...prev, [id]: { ...prev[id], ...updated } };

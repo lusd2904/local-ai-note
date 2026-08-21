@@ -15,23 +15,14 @@ const DEFAULT_PROVIDERS = {
     temperature: 0.7,
     models: ['claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022']
   },
-  deepseek: {
-    provider: 'deepseek',
-    name: 'DeepSeek',
-    base_url: 'https://api.deepseek.com/v1',
+  grok: {
+    provider: 'grok',
+    name: 'Grok',
+    base_url: 'https://api.x.ai/v1',
     api_key: '',
-    model_name: 'deepseek-chat',
+    model_name: 'grok-3',
     temperature: 0.7,
-    models: ['deepseek-chat', 'deepseek-reasoner']
-  },
-  openai: {
-    provider: 'openai',
-    name: 'OpenAI',
-    base_url: 'https://api.openai.com/v1',
-    api_key: '',
-    model_name: 'gpt-4o',
-    temperature: 0.7,
-    models: ['gpt-4o', 'gpt-4o-mini', 'o3-mini', 'gpt-4-turbo']
+    models: ['grok-4.6-xhigh', 'grok-3', 'grok-3-mini', 'grok-2', 'grok-2-mini']
   },
   ollama: {
     provider: 'ollama',
@@ -40,9 +31,15 @@ const DEFAULT_PROVIDERS = {
     api_key: 'ollama',
     model_name: 'qwen2.5:7b',
     temperature: 0.7,
-    models: ['qwen2.5:7b', 'deepseek-r1:7b', 'llama3.2', 'mistral']
+    models: ['qwen2.5:7b', 'llama3.2', 'mistral']
   }
 };
+
+function isMaskedKey(key) {
+  if (!key) return true;
+  if (key === 'ollama') return false;
+  return key.includes('...') || key === '***';
+}
 
 export default function SettingsModal({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
@@ -77,18 +74,41 @@ export default function SettingsModal({ isOpen, onClose }) {
         const merged = { ...DEFAULT_PROVIDERS };
         if (data.providers_config) {
           Object.keys(data.providers_config).forEach(k => {
+            if (k === 'openai' || k === 'deepseek') return;
+            const cfg = data.providers_config[k] || {};
             if (merged[k]) {
-              merged[k] = { ...merged[k], ...data.providers_config[k] };
+              const presetModels = merged[k].models;
+              merged[k] = { ...merged[k], ...cfg, models: presetModels };
             } else {
-              merged[k] = data.providers_config[k];
+              merged[k] = cfg;
+            }
+            if (cfg.api_key_configured) {
+              merged[k].api_key_configured = true;
+              merged[k].api_key_masked = cfg.api_key_masked || '';
+              merged[k].api_key = '';
             }
           });
         }
-        // 如果旧单一字段有值且当前渠道为空，填入
-        if (data.api_key && !merged[active]?.api_key) {
-          merged[active].api_key = data.api_key;
+        if (!merged.grok?.api_key_configured) {
+          const legacy = data.providers_config?.openai || data.providers_config?.deepseek;
+          if (legacy) {
+            merged.grok = { ...merged.grok, ...legacy, provider: 'grok', name: 'Grok' };
+            if (legacy.api_key_configured) {
+              merged.grok.api_key_configured = true;
+              merged.grok.api_key_masked = legacy.api_key_masked || data.api_key_masked || '';
+              merged.grok.api_key = '';
+            }
+          }
+        }
+        if (data.api_key_configured && merged[active] && !merged[active].api_key_configured) {
+          merged[active].api_key_configured = true;
+          merged[active].api_key_masked = data.api_key_masked || '';
         }
         setProvidersConfig(merged);
+        if (active === 'openai' || active === 'deepseek') {
+          setActiveProvider('grok');
+          setViewingProvider('grok');
+        }
       }
     } catch (err) {
       console.error('Failed to load AI settings', err);
@@ -118,16 +138,29 @@ export default function SettingsModal({ isOpen, onClose }) {
     try {
       setLoading(true);
       const currentActiveCfg = providersConfig[activeProvider] || providersConfig['claude'];
-      
+      const sanitized = {};
+      Object.entries(providersConfig).forEach(([k, v]) => {
+        const row = { ...v };
+        delete row.api_key_masked;
+        delete row.api_key_configured;
+        delete row.models;
+        if (k !== 'ollama' && isMaskedKey(row.api_key)) {
+          delete row.api_key;
+        }
+        sanitized[k] = row;
+      });
+
       const payload = {
         active_provider: activeProvider,
-        providers_config: providersConfig,
+        providers_config: sanitized,
         provider: activeProvider,
-        api_key: currentActiveCfg.api_key || '',
         base_url: currentActiveCfg.base_url || '',
         model_name: currentActiveCfg.model_name || '',
         temperature: currentActiveCfg.temperature !== undefined ? currentActiveCfg.temperature : 0.7
       };
+      if (currentActiveCfg.api_key && !isMaskedKey(currentActiveCfg.api_key)) {
+        payload.api_key = currentActiveCfg.api_key;
+      }
 
       await updateAISettings(payload);
       await loadSettings();
@@ -152,7 +185,12 @@ export default function SettingsModal({ isOpen, onClose }) {
         content: '这是一条用于测试 AI 模型连接的本地测试文本。',
         action: 'summary'
       });
-      setTestResult({ success: true, message: res.result || '连接成功！AI 响应正常。' });
+      const text = res.result || '';
+      if (text.includes('尚未配置')) {
+        setTestResult({ success: false, message: text });
+      } else {
+        setTestResult({ success: true, message: text || '连接成功！AI 响应正常。' });
+      }
     } catch (err) {
       setTestResult({ success: false, message: '连接测试失败: ' + (err.response?.data?.detail || err.message) });
     } finally {
@@ -195,11 +233,10 @@ export default function SettingsModal({ isOpen, onClose }) {
               </span>
             </div>
 
-            <div className="grid grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-3 gap-2.5">
               {[
                 { id: 'claude', name: 'Claude / Code', icon: Sparkles, color: 'purple' },
-                { id: 'deepseek', name: 'DeepSeek', icon: Zap, color: 'blue' },
-                { id: 'openai', name: 'OpenAI', icon: Bot, color: 'emerald' },
+                { id: 'grok', name: 'Grok', icon: Bot, color: 'emerald' },
                 { id: 'ollama', name: '本地 Ollama', icon: Cpu, color: 'amber' }
               ].map((p) => {
                 const Icon = p.icon;
@@ -284,9 +321,16 @@ export default function SettingsModal({ isOpen, onClose }) {
                     type="password"
                     value={currentCfg.api_key || ''}
                     onChange={(e) => handleCurrentFieldChange('api_key', e.target.value)}
-                    placeholder="sk-..."
+                    placeholder={
+                      currentCfg.api_key_configured
+                        ? `已配置 ${currentCfg.api_key_masked || ''}，留空保存则保持原密钥`
+                        : (viewingProvider === 'grok' ? 'xai-... 或 sk-...' : 'sk-...')
+                    }
                     className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg pl-9 pr-3 py-2 text-xs focus:border-blue-500 focus:outline-none dark:text-white font-mono"
                   />
+                  {currentCfg.api_key_configured && !currentCfg.api_key && (
+                    <p className="mt-1 text-[11px] text-green-600 dark:text-green-400">密钥已保存。若要更换，在此输入新 Key 后再保存。</p>
+                  )}
                 </div>
               </div>
             )}
@@ -319,7 +363,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                 type="text"
                 value={currentCfg.model_name || ''}
                 onChange={(e) => handleCurrentFieldChange('model_name', e.target.value)}
-                placeholder="例如: claude-3-7-sonnet-20250219 / deepseek-chat"
+                placeholder="例如: grok-3 / grok-4.6-xhigh / claude-3-7-sonnet-20250219"
                 className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-xs focus:border-blue-500 focus:outline-none dark:text-white font-mono"
               />
             </div>

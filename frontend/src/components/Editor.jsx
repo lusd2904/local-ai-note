@@ -162,6 +162,8 @@ function EditorCore({
   const noteIdRef = useRef(note?.id);
   const editorRef = useRef(null);
   const onUpdateNoteRef = useRef(onUpdateNote);
+  const lastSavedJsonRef = useRef('');
+  const allowSaveRef = useRef(false);
   noteIdRef.current = note?.id;
   onUpdateNoteRef.current = onUpdateNote;
 
@@ -176,22 +178,30 @@ function EditorCore({
     };
   };
 
+  const persistPayload = (payload) => {
+    const id = noteIdRef.current;
+    if (!payload || !id || !onUpdateNoteRef.current) return Promise.resolve();
+    if (payload.content_json === lastSavedJsonRef.current) return Promise.resolve();
+    lastSavedJsonRef.current = payload.content_json;
+    return onUpdateNoteRef.current(id, payload);
+  };
+
   const flushSave = () => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
     }
-    const payload = buildPayloadFromEditor(editorRef.current);
-    const id = noteIdRef.current;
-    if (payload && id && onUpdateNoteRef.current) {
-      return onUpdateNoteRef.current(id, payload);
-    }
-    return Promise.resolve();
+    if (!allowSaveRef.current) return Promise.resolve();
+    return persistPayload(buildPayloadFromEditor(editorRef.current));
   };
 
   useEffect(() => {
+    allowSaveRef.current = false;
+    lastSavedJsonRef.current = note?.content_json || '';
     window.__noteFlushSave = flushSave;
+    const readyTimer = setTimeout(() => { allowSaveRef.current = true; }, 400);
     return () => {
+      clearTimeout(readyTimer);
       flushSave();
       if (window.__noteFlushSave === flushSave) {
         delete window.__noteFlushSave;
@@ -282,17 +292,19 @@ function EditorCore({
     },
     onCreate: ({ editor: ed }) => {
       editorRef.current = ed;
+      lastSavedJsonRef.current = JSON.stringify(ed.getJSON());
     },
-    onUpdate: ({ editor: ed }) => {
+    onUpdate: ({ editor: ed, transaction }) => {
+      if (!allowSaveRef.current) return;
+      if (transaction && transaction.docChanged === false) return;
       const activeId = noteIdRef.current;
       if (!activeId || !ed || ed.isDestroyed) return;
       editorRef.current = ed;
+      const payload = buildPayloadFromEditor(ed);
+      if (!payload || payload.content_json === lastSavedJsonRef.current) return;
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
-        if (onUpdateNoteRef.current && noteIdRef.current === activeId) {
-          const payload = buildPayloadFromEditor(ed);
-          if (payload) onUpdateNoteRef.current(activeId, payload);
-        }
+        if (noteIdRef.current === activeId) persistPayload(payload);
       }, 800);
     }
   }, [note?.id]);
@@ -317,21 +329,12 @@ function EditorCore({
     }
   };
 
-  // 外部更新同步（如 AI 追加内容导致 note.updated_at 变化）
   useEffect(() => {
-    if (editor && !editor.isDestroyed && note) {
-      setTitle(note.title || '');
-      setNotebookId(note.notebook_id || '');
-      setTags(getInitialTags());
-    }
-  }, [note?.updated_at]);
-
-  useEffect(() => {
+    editorRef.current = editor;
     if (editor && !editor.isDestroyed) {
       editor.setEditable(!isPreviewMode);
     }
-    editorRef.current = editor;
-  }, [isPreviewMode, editor]);
+  }, [isPreviewMode]);
 
   // 组件卸载时清理定时器与全局下拉监听
   useEffect(() => {

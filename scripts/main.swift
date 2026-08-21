@@ -280,6 +280,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
+            return
+        }
         loadRetries += 1
         if loadRetries <= 3 {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in

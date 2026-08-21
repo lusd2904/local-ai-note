@@ -7,15 +7,15 @@ export default function AIConsultationView({ onSaveToNote }) {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('gpt-4o');
+  const [selectedModel, setSelectedModel] = useState('grok-3');
   const [copiedId, setCopiedId] = useState(null);
   const messagesEndRef = useRef(null);
   const abortControllerRef = useRef(null);
 
   const models = [
-    { id: 'gpt-4o', name: 'OpenAI GPT-4o', badge: '强逻辑' },
+    { id: 'grok-3', name: 'Grok 3', badge: '默认' },
+    { id: 'grok-4.6-xhigh', name: 'Grok 4.6', badge: '高推理' },
     { id: 'claude-3-7-sonnet', name: 'Claude 3.7', badge: '代码/写作' },
-    { id: 'deepseek-reasoner', name: 'DeepSeek R1', badge: '深度推理' },
     { id: 'ollama-local', name: 'Ollama (本地)', badge: '隐私安全' }
   ];
 

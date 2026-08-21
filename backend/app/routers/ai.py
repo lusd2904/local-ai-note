@@ -87,21 +87,12 @@ DEFAULT_PROVIDERS_CONFIG = {
         "reasoning_effort": "medium",
         "temperature": 0.7
     },
-    "deepseek": {
-        "provider": "deepseek",
-        "name": "DeepSeek",
-        "base_url": "https://api.deepseek.com/v1",
+    "grok": {
+        "provider": "grok",
+        "name": "Grok",
+        "base_url": "https://api.x.ai/v1",
         "api_key": "",
-        "model_name": "deepseek-chat",
-        "reasoning_effort": "medium",
-        "temperature": 0.7
-    },
-    "openai": {
-        "provider": "openai",
-        "name": "OpenAI",
-        "base_url": "https://api.openai.com/v1",
-        "api_key": "",
-        "model_name": "gpt-4o",
+        "model_name": "grok-3",
         "reasoning_effort": "medium",
         "temperature": 0.7
     },
@@ -115,6 +106,17 @@ DEFAULT_PROVIDERS_CONFIG = {
         "temperature": 0.7
     }
 }
+
+
+def _is_placeholder_key(key) -> bool:
+    if key is None:
+        return True
+    text = str(key).strip()
+    if text == "":
+        return True
+    if text == "***" or "..." in text:
+        return True
+    return False
 
 @router.get("/settings", response_model=AISettingOut)
 def get_ai_settings(db: Session = Depends(get_db)):
@@ -137,10 +139,22 @@ def get_ai_settings(db: Session = Depends(get_db)):
     for k, v in saved_providers.items():
         if k in merged_providers and isinstance(v, dict):
             merged_providers[k].update(v)
-        else:
+        elif k not in ("openai", "deepseek") and isinstance(v, dict):
             merged_providers[k] = v
 
+    grok_src = saved_providers.get("grok") if isinstance(saved_providers.get("grok"), dict) else None
+    if not grok_src or not grok_src.get("api_key"):
+        legacy = saved_providers.get("openai") if isinstance(saved_providers.get("openai"), dict) else None
+        if not legacy:
+            legacy = saved_providers.get("deepseek") if isinstance(saved_providers.get("deepseek"), dict) else None
+        if legacy:
+            merged_providers["grok"].update({k: v for k, v in legacy.items() if k not in ("provider", "name")})
+            merged_providers["grok"]["provider"] = "grok"
+            merged_providers["grok"]["name"] = "Grok"
+
     active_prov = setting.active_provider or setting.provider or "claude"
+    if active_prov in ("openai", "deepseek"):
+        active_prov = "grok"
     active_cfg = merged_providers.get(active_prov, merged_providers["claude"])
 
     masked_key = ""
@@ -166,6 +180,7 @@ def get_ai_settings(db: Session = Depends(get_db)):
         else:
             safe_cfg["api_key_masked"] = ""
             safe_cfg["api_key_configured"] = False
+        safe_cfg.pop("models", None)
         safe_providers[prov_key] = safe_cfg
 
     return {
@@ -198,11 +213,26 @@ def update_ai_settings(data: AISettingUpdate, db: Session = Depends(get_db)):
         current_providers = {}
 
     if data.providers_config:
-        current_providers.update(data.providers_config)
+        for k, v in data.providers_config.items():
+            if not isinstance(v, dict):
+                continue
+            incoming = dict(v)
+            incoming.pop("api_key_masked", None)
+            incoming.pop("api_key_configured", None)
+            incoming.pop("models", None)
+            old = current_providers.get(k) if isinstance(current_providers.get(k), dict) else {}
+            if _is_placeholder_key(incoming.get("api_key")):
+                if old.get("api_key"):
+                    incoming["api_key"] = old["api_key"]
+                else:
+                    incoming.pop("api_key", None)
+            current_providers[k] = {**old, **incoming}
         setting.providers_config = json.dumps(current_providers, ensure_ascii=False)
 
     # 2. 更新当前默认激活渠道
     active_p = data.active_provider or data.provider
+    if active_p in ("openai", "deepseek"):
+        active_p = "grok"
     if active_p:
         setting.active_provider = active_p
         setting.provider = active_p
@@ -210,14 +240,16 @@ def update_ai_settings(data: AISettingUpdate, db: Session = Depends(get_db)):
         if active_p in current_providers:
             p_info = current_providers[active_p]
             setting.base_url = p_info.get("base_url", setting.base_url)
-            setting.api_key = p_info.get("api_key", setting.api_key)
+            if not _is_placeholder_key(p_info.get("api_key")):
+                setting.api_key = p_info.get("api_key", setting.api_key)
             setting.model_name = p_info.get("model_name", setting.model_name)
             setting.reasoning_effort = p_info.get("reasoning_effort", setting.reasoning_effort)
             setting.temperature = p_info.get("temperature", setting.temperature)
 
-    if data.api_key is not None:
+    if data.api_key is not None and not _is_placeholder_key(data.api_key):
         setting.api_key = data.api_key
-        if active_p in current_providers: current_providers[active_p]["api_key"] = data.api_key
+        if active_p in current_providers:
+            current_providers[active_p]["api_key"] = data.api_key
     if data.base_url is not None:
         setting.base_url = data.base_url
         if active_p in current_providers: current_providers[active_p]["base_url"] = data.base_url

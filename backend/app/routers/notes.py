@@ -61,34 +61,51 @@ def hash_password(password: str) -> str:
     使用 PBKDF2-HMAC-SHA256 对密码进行安全哈希
     - 随机 16 字节盐值
     - 600,000 次迭代（抵御暴力破解和 GPU 加速攻击）
-    - 返回格式: {salt_hex}${hash_hex}
+    - 返回格式: pbkdf2${iterations}${salt_hex}${hash_hex}
     """
     salt = secrets.token_bytes(16)
     pw_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, PBKDF2_ITERATIONS)
-    return f"{salt.hex()}${pw_hash.hex()}"
+    return f"pbkdf2${PBKDF2_ITERATIONS}${salt.hex()}${pw_hash.hex()}"
 
 def verify_password(stored_hash: str, password: str) -> bool:
     """
     验证密码是否匹配存储的哈希值
-    支持向后兼容：自动检测旧版 SHA-256 格式并升级提示
+    支持全向后兼容：
+    1. pbkdf2${iterations}${salt_hex}${hash_hex} (标准新格式)
+    2. {salt_hex}${hash_hex} (过渡期两段式 PBKDF2 或旧版 SHA256)
     """
     if not stored_hash or "$" not in stored_hash:
         return False
     try:
-        salt_hex, pw_hash_hex = stored_hash.split("$", 1)
-        salt = bytes.fromhex(salt_hex)
+        parts = stored_hash.split("$")
 
-        # 检测是否为旧版 SHA-256 格式（哈希长度为 64 字符）
-        if len(pw_hash_hex) == 64 and len(salt_hex) == 32:
-            # 旧版验证逻辑（向后兼容）
-            expected_hash = hashlib.sha256((salt_hex + password).encode("utf-8")).hexdigest()
-            return secrets.compare_digest(pw_hash_hex, expected_hash)
+        # 格式1: pbkdf2${iterations}${salt_hex}${hash_hex}
+        if len(parts) == 4 and parts[0] == "pbkdf2":
+            iterations = int(parts[1])
+            salt = bytes.fromhex(parts[2])
+            pw_hash_hex = parts[3]
+            expected = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, iterations).hex()
+            return secrets.compare_digest(pw_hash_hex, expected)
 
-        # 新版 PBKDF2 验证
-        expected_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, PBKDF2_ITERATIONS)
-        return secrets.compare_digest(pw_hash_hex, expected_hash.hex())
+        # 格式2: 两段式 ${salt_hex}${hash_hex}
+        if len(parts) == 2:
+            salt_hex, pw_hash_hex = parts[0], parts[1]
+            salt = bytes.fromhex(salt_hex)
+
+            # 优先尝试 PBKDF2 (600,000 迭代)
+            expected_pbkdf2 = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, PBKDF2_ITERATIONS).hex()
+            if secrets.compare_digest(pw_hash_hex, expected_pbkdf2):
+                return True
+
+            # 兼容尝试旧版 raw sha256
+            expected_sha256 = hashlib.sha256((salt_hex + password).encode("utf-8")).hexdigest()
+            if secrets.compare_digest(pw_hash_hex, expected_sha256):
+                return True
+
+        return False
     except Exception:
         return False
+
 
 router = APIRouter(prefix="/api/notes", tags=["Notes"])
 
@@ -331,19 +348,12 @@ def verify_note_password(note_id: str, data: NoteVerifyPasswordRequest, db: Sess
         if not note.password_hash or not verify_password(note.password_hash, data.password):
             raise HTTPException(status_code=400, detail="密码错误")
 
-        # 🔐 自动升级旧版密码哈希为新版 PBKDF2
-        if note.password_hash and "$" in note.password_hash:
-            salt_hex, pw_hash_hex = note.password_hash.split("$", 1)
-            # 检测旧版格式（SHA-256 哈希长度为 64，PBKDF2 也是 64，但通过迭代标识区分）
-            # 如果是旧版格式（通过简单长度判断），则升级
-            if len(pw_hash_hex) == 64 and len(salt_hex) == 32:
-                # 验证成功后，使用新版算法重新哈希
-                new_hash = hash_password(data.password)
-                # 仅在新旧哈希不同时更新（避免重复升级）
-                if new_hash != note.password_hash:
-                    note.password_hash = new_hash
-                    db.commit()
-                    db.refresh(note)
+        # 🔐 自动升级旧版密码哈希为新版标准 PBKDF2 格式
+        if note.password_hash and not note.password_hash.startswith("pbkdf2$"):
+            new_hash = hash_password(data.password)
+            note.password_hash = new_hash
+            db.commit()
+            db.refresh(note)
 
     audio_count = db.query(AudioRecord).filter(AudioRecord.note_id == note.id).count()
     tags_list = []
