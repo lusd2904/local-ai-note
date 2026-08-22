@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import Sidebar from './components/Sidebar';
 import NoteList from './components/NoteList';
-import Editor from './components/Editor';
 import ErrorBoundary from './components/ErrorBoundary';
 import CommandPalette from './components/CommandPalette';
+
+const Editor = lazy(() => import('./components/Editor'));
 
 const AudioStudio = lazy(() => import('./components/AudioStudio'));
 const AICopilotModal = lazy(() => import('./components/AICopilotModal'));
