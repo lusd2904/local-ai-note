@@ -30,6 +30,8 @@ def get_memos(
 
     if keyword:
         query = query.filter(Memo.content.contains(keyword))
+    if tag:
+        query = query.filter(Memo.tags.contains(tag))
 
     memos = query.order_by(desc(Memo.is_pinned), desc(Memo.created_at)).all()
 

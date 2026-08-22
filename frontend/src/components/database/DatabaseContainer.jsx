@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Plus, Search, Table, Kanban, Download, Trash2, 
-  Settings, Check, X, Sparkles, Filter, ArrowUpDown, 
-  HelpCircle, RefreshCw
+  Plus, Search, Table, Kanban, Trash2, 
+  X, RefreshCw
 } from 'lucide-react';
 import TableView from './TableView';
 import KanbanView from './KanbanView';
@@ -22,6 +21,7 @@ export default function DatabaseContainer({
   const [loading, setLoading] = useState(true);
   const [activeViewType, setActiveViewType] = useState('table'); // 'table' | 'kanban'
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedRow, setSelectedRow] = useState(null);
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   const [isAddColModalOpen, setIsAddColModalOpen] = useState(false);
@@ -46,6 +46,11 @@ export default function DatabaseContainer({
       fetchDatabase();
     }
   }, [databaseId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchKeyword), 200);
+    return () => clearTimeout(timer);
+  }, [searchKeyword]);
 
   const fetchDatabase = async () => {
     try {
@@ -178,14 +183,16 @@ export default function DatabaseContainer({
     );
   }
 
-  // 过滤数据行
-  const filteredRows = (database.rows || []).filter(row => {
-    if (!searchKeyword.trim()) return true;
-    const kw = searchKeyword.toLowerCase();
-    const propsStr = JSON.stringify(row.properties || {}).toLowerCase();
-    const contentStr = (row.content || '').toLowerCase();
-    return propsStr.includes(kw) || contentStr.includes(kw);
-  });
+  const filteredRows = useMemo(() => {
+    const rows = database.rows || [];
+    const kw = debouncedSearch.trim().toLowerCase();
+    if (!kw) return rows;
+    return rows.filter(row => {
+      const propsStr = JSON.stringify(row.properties || {}).toLowerCase();
+      const contentStr = (row.content || '').toLowerCase();
+      return propsStr.includes(kw) || contentStr.includes(kw);
+    });
+  }, [database.rows, debouncedSearch]);
 
   return (
     <div className="flex-1 flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">

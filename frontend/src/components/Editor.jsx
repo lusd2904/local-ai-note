@@ -1,63 +1,72 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
-import { BubbleMenu } from '@tiptap/react/menus';
-import StarterKit from '@tiptap/starter-kit';
-import Image from '@tiptap/extension-image';
-import Placeholder from '@tiptap/extension-placeholder';
-import { Table } from '@tiptap/extension-table';
-import { TableRow } from '@tiptap/extension-table-row';
-import { TableCell } from '@tiptap/extension-table-cell';
-import { TableHeader } from '@tiptap/extension-table-header';
-import { HorizontalRule } from '@tiptap/extension-horizontal-rule';
-import { Underline } from '@tiptap/extension-underline';
-import { 
-  Bold, Italic, Heading1, Heading2, Heading3, List, ListOrdered, 
-  Code, Quote, Image as ImageIcon, Sparkles, Wand2, Tag, 
-  Folder, Network, Bot, Download, Check, RefreshCw, X, FileText, Lock, Unlock, Eye, EyeOff, BookOpenCheck,
-  Table as TableIcon, Minus, Strikethrough, Underline as UnderlineIcon, Copy, Edit3, ChevronDown, CheckCheck,
-  Link2, BookOpen
+import { useCreateBlockNote } from '@blocknote/react';
+import { BlockNoteView } from '@blocknote/mantine';
+import '@blocknote/core/fonts/inter.css';
+import '@blocknote/mantine/style.css';
+import {
+  Sparkles, Wand2, Tag, Folder, Network, Bot, Download, Check, RefreshCw, X, FileText,
+  Lock, Unlock, Eye, EyeOff, BookOpenCheck, Copy, Edit3, ChevronDown, CheckCheck,
+  Link2, BookOpen, Image as ImageIcon, Type
 } from 'lucide-react';
 import { uploadImage, streamAIAnalyze, getNoteBacklinks } from '../api/client';
 import LockModal from './LockModal';
-import { tiptapJsonToMarkdown, makeSummary } from '../utils/markdown';
+import {
+  tiptapJsonToMarkdown,
+  makeSummary,
+  isBlockNoteDocument,
+  isTiptapDocument
+} from '../utils/markdown';
 
-// 🌟 将 Markdown 格式转换为 Tiptap 能直接渲染为高清图片与富文本的 HTML
-function markdownToRichHTML(md) {
-  if (!md) return '';
-  let html = md;
-  // 1. 将 ![图片说明](url) 转换为 <img src="url" alt="图片说明" />
-  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />');
-  // 2. 将粗体 **text** 转换为 <strong>text</strong>
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  // 3. 将斜体 *text* 转换为 <em>text</em>
-  html = html.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
-  // 4. 将标题转换为标准 HTML 标题
-  html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-  html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-  html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-  // 5. 将引用转换为 <blockquote>
-  html = html.replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>');
-  // 6. 将 [[双向链接]] 转换为带图标与高亮背景的内链标签
-  html = html.replace(/\[\[([^\]]+)\]\]/g, '<span class="inline-flex items-center space-x-1 px-2 py-0.5 mx-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300 font-semibold border border-blue-200/80 dark:border-blue-800 text-xs shadow-xs select-none cursor-pointer hover:underline" data-internal-link="$1">🔗 $1</span>');
-  // 7. 换行
-  html = html.replace(/\n\n/g, '</p><p>');
-  html = html.replace(/\n/g, '<br/>');
-  return `<p>${html}</p>`;
+function maybeAwait(value) {
+  return value && typeof value.then === 'function' ? value : Promise.resolve(value);
 }
 
-function parseNoteContent(note) {
-  if (!note) return '';
-  if (note.content_json) {
+function useDarkMode() {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
+  useEffect(() => {
+    const obs = new MutationObserver(() => {
+      setDark(document.documentElement.classList.contains('dark'));
+    });
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
+  return dark;
+}
+
+async function resolveInitialBlocks(editor, note) {
+  if (note?.content_json) {
     try {
       const parsed = JSON.parse(note.content_json);
-      if (parsed && typeof parsed === 'object') {
-        return parsed;
+      if (isBlockNoteDocument(parsed)) return parsed;
+      if (isTiptapDocument(parsed)) {
+        const md = tiptapJsonToMarkdown(parsed) || note.content || '';
+        if (md.trim()) return maybeAwait(editor.tryParseMarkdownToBlocks(md));
       }
     } catch (e) {
-      // 忽略 JSON 解析失败，回退到 Markdown 转换
+      // 回退到 Markdown
     }
   }
-  return markdownToRichHTML(note.content || '');
+  const md = note?.content || '';
+  if (!md.trim()) return null;
+  return maybeAwait(editor.tryParseMarkdownToBlocks(md));
+}
+
+async function replaceEditorMarkdown(editor, markdown) {
+  const blocks = await maybeAwait(editor.tryParseMarkdownToBlocks(markdown || ''));
+  if (blocks && blocks.length > 0) {
+    editor.replaceBlocks(editor.document, blocks);
+  }
+}
+
+async function appendEditorMarkdown(editor, markdown) {
+  const blocks = await maybeAwait(editor.tryParseMarkdownToBlocks(markdown || ''));
+  if (!blocks || blocks.length === 0) return;
+  const last = editor.document[editor.document.length - 1];
+  if (last) {
+    editor.insertBlocks(blocks, last, 'after');
+  } else {
+    editor.replaceBlocks(editor.document, blocks);
+  }
 }
 
 /**
@@ -67,8 +76,7 @@ function parseNoteContent(note) {
 export function parseTagsFromAIResponse(resText) {
   if (!resText || typeof resText !== 'string') return [];
   const text = resText.trim();
-  
-  // 1. 尝试直接从文本中提取 JSON 数组 [ ... ]
+
   const jsonMatch = text.match(/\[[\s\S]*?\]/);
   if (jsonMatch) {
     try {
@@ -80,13 +88,11 @@ export function parseTagsFromAIResponse(resText) {
     } catch (e) {}
   }
 
-  // 2. 尝试提取 #标签 格式
   const hashTags = text.match(/#([\w\u4e00-\u9fa5\-]+)/g);
   if (hashTags && hashTags.length > 0) {
     return hashTags.map(t => t.replace(/^#/, '').trim()).filter(Boolean);
   }
 
-  // 3. 尝试提取列表格式 (如 1. 标签 或 - 标签 或 • 标签)
   const listItems = text.split('\n')
     .map(line => line.replace(/^[\s*\-•\d\.\、]+/, '').trim())
     .map(line => line.replace(/^["'“”‘’]|["'“”‘’]$/g, '').trim())
@@ -95,7 +101,6 @@ export function parseTagsFromAIResponse(resText) {
     return listItems.slice(0, 6);
   }
 
-  // 4. 尝试顿号/逗号分隔 (如 标签1、标签2、标签3)
   if (text.includes('、') || text.includes(',')) {
     const splitTags = text.split(/[、,，\n]+/)
       .map(t => t.replace(/^[\s*\-•\d\.\、"']+|["'“”‘’]$/g, '').trim())
@@ -112,7 +117,6 @@ export function parseTagsFromAIResponse(resText) {
   return [];
 }
 
-// 🌟 空状态占位视图（当没有选中笔记时显示，无需初始化 Tiptap 引擎）
 function EmptyEditor() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center bg-mac-editor dark:bg-mac-editorDark text-gray-400 select-none">
@@ -121,13 +125,12 @@ function EmptyEditor() {
           <FileText className="w-8 h-8" />
         </div>
         <h3 className="text-base font-semibold text-gray-600 dark:text-gray-300">请选择或新建一篇笔记</h3>
-        <p className="text-xs text-gray-400">支持富文本所见即所得、截图秒级粘贴渲染、Claude 智能分析与 Word 导出</p>
+        <p className="text-xs text-gray-400">支持块级富文本、斜杠命令、截图粘贴、Claude 智能分析与 Word 导出</p>
       </div>
     </div>
   );
 }
 
-// 🌟 核心编辑器组件（独立生命周期，每个 note 实例独立绑定）
 function EditorCore({
   note,
   notebooks = [],
@@ -142,19 +145,18 @@ function EditorCore({
   allNotes = [],
   onSelectNote
 }) {
+  const darkMode = useDarkMode();
   const [title, setTitle] = useState(note?.title || '');
   const [notebookId, setNotebookId] = useState(note?.notebook_id || '');
   const [isLockModalOpen, setIsLockModalOpen] = useState(false);
   const [lockModalMode, setLockModalMode] = useState('lock');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
-  
-  // 🌟 反向引用与双向链接状态
+
   const [backlinks, setBacklinks] = useState([]);
   const [showBacklinks, setShowBacklinks] = useState(true);
   const [isLinkPickerOpen, setIsLinkPickerOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState('');
 
-  // 加载当前笔记的反向引用
   useEffect(() => {
     if (!note?.id) return;
     loadBacklinks();
@@ -165,7 +167,6 @@ function EditorCore({
       const res = await getNoteBacklinks(note.id);
       setBacklinks(res.backlinks || []);
     } catch (e) {
-      // 离线环境从 allNotes 中本地搜索反向引用
       const currentTitle = note?.title?.trim()?.toLowerCase();
       if (!currentTitle) return;
       const matched = [];
@@ -201,17 +202,14 @@ function EditorCore({
   const [isAIAnalyzing, setIsAIAnalyzing] = useState(false);
   const [aiActionTip, setAiActionTip] = useState('');
   const [exportSuccessTip, setExportSuccessTip] = useState(false);
+  const [editorReady, setEditorReady] = useState(false);
 
-  // 🌟 当外部切换笔记或更新标签时保持内部 tags 状态同步
   useEffect(() => {
     setTags(getInitialTags());
   }, [note?.id, note?.tags]);
-  
-  // 🌟 下拉菜单交互状态
-  const [showTableMenu, setShowTableMenu] = useState(false);
+
   const [showPolishMenu, setShowPolishMenu] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const tableMenuRef = useRef(null);
   const polishMenuRef = useRef(null);
   const exportMenuRef = useRef(null);
 
@@ -221,16 +219,26 @@ function EditorCore({
   const onUpdateNoteRef = useRef(onUpdateNote);
   const lastSavedJsonRef = useRef('');
   const allowSaveRef = useRef(false);
+  const hydratedRef = useRef(false);
   noteIdRef.current = note?.id;
   onUpdateNoteRef.current = onUpdateNote;
 
-  const buildPayloadFromEditor = (ed) => {
-    if (!ed || ed.isDestroyed) return null;
-    const json = ed.getJSON();
-    const markdown = tiptapJsonToMarkdown(json);
+  const editor = useCreateBlockNote({
+    uploadFile: async (file) => {
+      const data = await uploadImage(file);
+      if (!data?.url) throw new Error('图片上传失败');
+      return data.url;
+    }
+  }, [note?.id]);
+
+  editorRef.current = editor;
+
+  const buildPayloadFromEditor = async (ed) => {
+    if (!ed) return null;
+    const markdown = await maybeAwait(ed.blocksToMarkdownLossy(ed.document));
     return {
       content: markdown,
-      content_json: JSON.stringify(json),
+      content_json: JSON.stringify(ed.document),
       summary: makeSummary(markdown)
     };
   };
@@ -243,162 +251,70 @@ function EditorCore({
     return onUpdateNoteRef.current(id, payload);
   };
 
-  const flushSave = () => {
+  const flushSave = async () => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
     }
-    if (!allowSaveRef.current) return Promise.resolve();
-    return persistPayload(buildPayloadFromEditor(editorRef.current));
+    if (!allowSaveRef.current || !editorRef.current) return;
+    const payload = await buildPayloadFromEditor(editorRef.current);
+    return persistPayload(payload);
+  };
+
+  const scheduleSave = () => {
+    if (!allowSaveRef.current) return;
+    const activeId = noteIdRef.current;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(async () => {
+      if (noteIdRef.current !== activeId || !editorRef.current) return;
+      const payload = await buildPayloadFromEditor(editorRef.current);
+      persistPayload(payload);
+    }, 800);
   };
 
   useEffect(() => {
     allowSaveRef.current = false;
+    hydratedRef.current = false;
+    setEditorReady(false);
     lastSavedJsonRef.current = note?.content_json || '';
     window.__noteFlushSave = flushSave;
-    const readyTimer = setTimeout(() => { allowSaveRef.current = true; }, 400);
-    return () => {
-      clearTimeout(readyTimer);
-      flushSave();
-      if (window.__noteFlushSave === flushSave) {
-        delete window.__noteFlushSave;
-      }
+    window.__noteInsertMarkdown = async (text) => {
+      if (!editorRef.current) return;
+      await appendEditorMarkdown(editorRef.current, text);
+      const payload = await buildPayloadFromEditor(editorRef.current);
+      persistPayload(payload);
     };
-  }, [note?.id]);
 
-  // 初始化 Tiptap 所见即所得编辑器
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: {
-          levels: [1, 2, 3]
+    let cancelled = false;
+    (async () => {
+      try {
+        const blocks = await resolveInitialBlocks(editor, note);
+        if (cancelled) return;
+        if (blocks && blocks.length > 0) {
+          editor.replaceBlocks(editor.document, blocks);
         }
-      }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      HorizontalRule,
-      Underline,
-      Image.configure({
-        inline: true,
-        allowBase64: true,
-        HTMLAttributes: {
-          class: 'rounded-xl shadow-md my-3 max-w-full h-auto border border-gray-200 dark:border-gray-700 select-none'
-        }
-      }),
-      Placeholder.configure({
-        placeholder: '在此开始输入正文，或按 Cmd+V 直接粘贴截图图片...'
-      })
-    ],
-    content: parseNoteContent(note),
-    immediatelyRender: false,
-    editorProps: {
-      attributes: {
-        class: 'prose dark:prose-invert max-w-none focus:outline-none min-h-[500px] text-sm leading-relaxed px-8 py-6'
-      },
-      // 🌟 拦截粘贴事件：截图粘贴后直接上传并无缝渲染为真实图片，绝不暴露路径字符！
-      handlePaste: (view, event) => {
-        const clipboardData = event.clipboardData || event.originalEvent?.clipboardData;
-        const items = clipboardData?.items;
-        
-        // 如果包含 HTML 或文本内容，不拦截，优先让 Tiptap 处理富文本粘贴
-        if (clipboardData && (clipboardData.types.includes('text/html') || clipboardData.types.includes('text/plain'))) {
-          return false;
-        }
-
-        if (items) {
-          for (let i = 0; i < items.length; i++) {
-            if (items[i].type.indexOf('image') !== -1) {
-              event.preventDefault();
-              const file = items[i].getAsFile();
-              if (file) {
-                uploadImage(file).then((data) => {
-                  if (data && data.url && editor && !editor.isDestroyed) {
-                    editor.chain().focus().setImage({ src: data.url }).run();
-                  }
-                }).catch(err => {
-                  console.error('Failed to paste image', err);
-                  alert('图片上传失败: ' + err.message);
-                });
-                return true;
-              }
-            }
-          }
-        }
-        return false;
-      },
-      // 🌟 拦截拖拽图片事件
-      handleDrop: (view, event, slice, moved) => {
-        if (!moved && event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]) {
-          const file = event.dataTransfer.files[0];
-          if (file.type.startsWith('image/')) {
-            event.preventDefault();
-            uploadImage(file).then((data) => {
-              if (data && data.url && editor && !editor.isDestroyed) {
-                editor.chain().focus().setImage({ src: data.url }).run();
-              }
-            }).catch(err => {
-              console.error('Failed to drop image', err);
-            });
-            return true;
-          }
-        }
-        return false;
+        lastSavedJsonRef.current = JSON.stringify(editor.document);
+        hydratedRef.current = true;
+        setEditorReady(true);
+        setTimeout(() => { allowSaveRef.current = true; }, 400);
+      } catch (err) {
+        console.warn('Failed to hydrate editor:', err);
+        setEditorReady(true);
+        allowSaveRef.current = true;
       }
-    },
-    onCreate: ({ editor: ed }) => {
-      editorRef.current = ed;
-      lastSavedJsonRef.current = JSON.stringify(ed.getJSON());
-    },
-    onUpdate: ({ editor: ed, transaction }) => {
-      if (!allowSaveRef.current) return;
-      if (transaction && transaction.docChanged === false) return;
-      const activeId = noteIdRef.current;
-      if (!activeId || !ed || ed.isDestroyed) return;
-      editorRef.current = ed;
-      const payload = buildPayloadFromEditor(ed);
-      if (!payload || payload.content_json === lastSavedJsonRef.current) return;
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => {
-        if (noteIdRef.current === activeId) persistPayload(payload);
-      }, 800);
-    }
-  }, [note?.id]);
+    })();
 
-  // 安全获取格式激活状态（防止 destroyed 实例导致 commandManager 崩溃）
-  const isFormatActive = (name, attrs) => {
-    if (!editor || editor.isDestroyed) return false;
-    try {
-      return editor.isActive(name, attrs);
-    } catch {
-      return false;
-    }
-  };
+    return () => {
+      cancelled = true;
+      clearTimeout(saveTimeoutRef.current);
+      flushSave();
+      if (window.__noteFlushSave === flushSave) delete window.__noteFlushSave;
+      if (window.__noteInsertMarkdown) delete window.__noteInsertMarkdown;
+    };
+  }, [editor, note?.id]);
 
-  // 安全执行 Editor Chain 指令
-  const runEditorChain = (fn) => {
-    if (!editor || editor.isDestroyed) return;
-    try {
-      fn(editor.chain().focus()).run();
-    } catch (e) {
-      console.warn('Editor chain error:', e);
-    }
-  };
-
-  useEffect(() => {
-    editorRef.current = editor;
-    if (editor && !editor.isDestroyed) {
-      editor.setEditable(!isPreviewMode);
-    }
-  }, [isPreviewMode]);
-
-  // 组件卸载时清理定时器与全局下拉监听
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (tableMenuRef.current && !tableMenuRef.current.contains(e.target)) {
-        setShowTableMenu(false);
-      }
       if (polishMenuRef.current && !polishMenuRef.current.contains(e.target)) {
         setShowPolishMenu(false);
       }
@@ -407,33 +323,24 @@ function EditorCore({
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // 标题修改保存
   const handleTitleChange = (e) => {
     const val = e.target.value;
     setTitle(val);
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      if (note && onUpdateNote) {
-        onUpdateNote(note.id, { title: val });
-      }
+      if (note && onUpdateNote) onUpdateNote(note.id, { title: val });
     }, 600);
   };
 
-  // 归属分类切换
   const handleNotebookChange = (e) => {
     const newNbId = e.target.value || null;
     setNotebookId(newNbId);
-    if (note && onUpdateNote) {
-      onUpdateNote(note.id, { notebook_id: newNbId });
-    }
+    if (note && onUpdateNote) onUpdateNote(note.id, { notebook_id: newNbId });
   };
 
-  // 标签添加与删除
   const handleAddTag = (e) => {
     if (e.key === 'Enter' && newTagInput.trim()) {
       e.preventDefault();
@@ -453,37 +360,46 @@ function EditorCore({
     if (note && onUpdateNote) onUpdateNote(note.id, { tags: updatedTags });
   };
 
-  // 手动点击上传图片
   const handleManualImageUpload = () => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
     input.onchange = async (e) => {
       const file = e.target.files[0];
-      if (file) {
-        try {
-          const data = await uploadImage(file);
-          if (data && data.url && editor && !editor.isDestroyed) {
-            editor.chain().focus().setImage({ src: data.url }).run();
-          }
-        } catch (err) {
-          alert('上传图片失败: ' + err.message);
+      if (!file || !editor) return;
+      try {
+        const data = await uploadImage(file);
+        if (data?.url) {
+          const last = editor.document[editor.document.length - 1];
+          editor.insertBlocks([{ type: 'image', props: { url: data.url } }], last, 'after');
         }
+      } catch (err) {
+        alert('上传图片失败: ' + err.message);
       }
     };
     input.click();
   };
 
-  // 快捷 AI 操作
+  const actionLabel = (action) => {
+    if (action === 'expand') return '深度扩写';
+    if (action === 'summary') return '智能摘要';
+    if (action.startsWith('polish')) return '润色优化';
+    if (action === 'continue') return '续写';
+    if (action === 'auto_format') return '格式化';
+    if (action === 'correct') return '语法纠错';
+    if (action === 'extract_tags') return '提炼标签';
+    return action;
+  };
+
   const handleRunAIAction = async (action) => {
-    if (!editor || editor.isDestroyed || !note) return;
-    const contentText = editor.getText();
+    if (!editor || !note) return;
+    const contentText = await maybeAwait(editor.blocksToMarkdownLossy(editor.document));
     if (!contentText.trim()) {
       alert('当前笔记暂无文字内容，无法进行 AI 分析。');
       return;
     }
     setIsAIAnalyzing(true);
-    setAiActionTip(`正在执行 AI ${action === 'expand' ? '深度扩写' : action === 'summary' ? '智能摘要' : action === 'polish' ? '润色优化' : '提炼标签'}...`);
+    setAiActionTip(`正在执行 AI ${actionLabel(action)}...`);
 
     try {
       let accumulatedText = '';
@@ -491,11 +407,11 @@ function EditorCore({
         { content: contentText, action },
         (chunk) => {
           accumulatedText += chunk;
-          setAiActionTip(`🌊 正在流式生成 AI ${action === 'expand' ? '扩写' : action === 'summary' ? '摘要' : action === 'polish' ? '润色' : '标签'} (${accumulatedText.length} 字)...`);
+          setAiActionTip(`🌊 正在流式生成 AI ${actionLabel(action)} (${accumulatedText.length} 字)...`);
         },
-        () => {
+        async () => {
           const resText = accumulatedText.trim();
-          if (!resText || !editor || editor.isDestroyed) return;
+          if (!resText || !editor) return;
 
           if (action === 'extract_tags') {
             const parsed = parseTagsFromAIResponse(resText);
@@ -507,21 +423,23 @@ function EditorCore({
               setAiActionTip(`✅ 已提炼并关联 ${parsed.length} 个新标签：${parsed.join('、')}`);
               setTimeout(() => setAiActionTip(''), 4000);
             } else {
-              setAiActionTip(`⚠️ 未能从 AI 返回结果中解析出标签`);
+              setAiActionTip('⚠️ 未能从 AI 返回结果中解析出标签');
               setTimeout(() => setAiActionTip(''), 4000);
             }
-          } else if (action === 'expand') {
-            editor.commands.setContent(markdownToRichHTML(resText));
-            const payload = buildPayloadFromEditor(editor);
-            if (onUpdateNote && payload) onUpdateNote(note.id, payload);
-          } else if (action === 'polish') {
-            editor.commands.setContent(markdownToRichHTML(resText));
-            const payload = buildPayloadFromEditor(editor);
-            if (onUpdateNote && payload) onUpdateNote(note.id, payload);
-          } else if (action === 'summary') {
-            editor.chain().focus().insertContent(`\n\n<blockquote><p>🤖 <strong>AI 核心要点总结：</strong><br/>${resText.replace(/\n/g, '<br/>')}</p></blockquote>\n\n`).run();
-            const payload = buildPayloadFromEditor(editor);
-            if (onUpdateNote && payload) onUpdateNote(note.id, { ...payload, summary: resText.slice(0, 150) });
+            return;
+          }
+
+          if (action === 'summary') {
+            await appendEditorMarkdown(editor, `> 🤖 **AI 核心要点总结：**\n>\n> ${resText.replace(/\n/g, '\n> ')}`);
+          } else if (action === 'continue') {
+            await appendEditorMarkdown(editor, resText);
+          } else {
+            await replaceEditorMarkdown(editor, resText);
+          }
+
+          const payload = await buildPayloadFromEditor(editor);
+          if (onUpdateNote && payload) {
+            onUpdateNote(note.id, action === 'summary' ? { ...payload, summary: resText.slice(0, 150) } : payload);
           }
         },
         (err) => {
@@ -536,14 +454,6 @@ function EditorCore({
     }
   };
 
-  // 导出为 Word 文档
-  const handleExportWord = () => {
-    if (!note) return;
-    window.location.href = `/api/notes/${note.id}/export/docx`;
-    setExportSuccessTip(true);
-    setTimeout(() => setExportSuccessTip(false), 4000);
-  };
-
   const handleLockModalConfirm = async (password) => {
     if (lockModalMode === 'lock') {
       await onLockNote(note.id, password);
@@ -552,14 +462,31 @@ function EditorCore({
     }
   };
 
+  const handleWikiClick = (e) => {
+    const raw = (e.target?.textContent || '').trim();
+    const match = raw.match(/\[\[([^\]]+)\]\]/);
+    if (!match) return;
+    const targetTitle = match[1];
+    const matched = (allNotes || []).find(n =>
+      n.title?.trim()?.toLowerCase() === targetTitle.trim().toLowerCase() || n.id === targetTitle
+    );
+    if (matched && onSelectNote) onSelectNote(matched.id);
+  };
+
+  const insertWikiLink = (targetNote) => {
+    if (!editor) return;
+    editor.focus();
+    editor.insertInlineContent(`[[${targetNote.title || '无标题笔记'}]]`);
+    setIsLinkPickerOpen(false);
+    setLinkSearch('');
+  };
+
   return (
-    <main className="flex-1 bg-mac-editor dark:bg-mac-editorDark flex flex-col h-screen overflow-hidden transition-colors">
-      {/* 顶部主工具栏 (支持拖动窗口) */}
-      <div 
+    <main className="flex-1 bg-mac-editor dark:bg-mac-editorDark flex flex-col h-screen overflow-hidden transition-colors editor-panel">
+      <div
         style={{ WebkitAppRegion: 'drag' }}
         className="h-12 px-4 border-b border-mac-border dark:border-mac-borderDark flex items-center justify-between gap-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur shrink-0 cursor-default"
       >
-        {/* 左侧：归属笔记本分类 */}
         <div className="flex items-center space-x-2 text-xs text-gray-500" style={{ WebkitAppRegion: 'no-drag' }}>
           <Folder className="w-3.5 h-3.5 text-amber-500" />
           <select
@@ -574,7 +501,6 @@ function EditorCore({
           </select>
         </div>
 
-        {/* 右侧：脑图、AI 助手、锁管理与 Word 导出 */}
         <div className="flex items-center space-x-1.5" style={{ WebkitAppRegion: 'no-drag' }}>
           {!note.is_locked ? (
             <button
@@ -607,7 +533,10 @@ function EditorCore({
           )}
 
           <button
-            onClick={() => onGenerateMindMap && onGenerateMindMap(editor?.getText() || '')}
+            onClick={async () => {
+              const text = editor ? await maybeAwait(editor.blocksToMarkdownLossy(editor.document)) : '';
+              onGenerateMindMap && onGenerateMindMap(text);
+            }}
             className="flex items-center space-x-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded-md text-xs font-medium transition"
             title="一键生成 Mermaid 思维导图"
           >
@@ -642,7 +571,6 @@ function EditorCore({
             <span className="hidden md:inline">复制副本</span>
           </button>
 
-          {/* 🌟 多格式导出下拉菜单 */}
           <div className="relative" ref={exportMenuRef}>
             <button
               onClick={(e) => {
@@ -662,55 +590,34 @@ function EditorCore({
             </button>
             {showExportMenu && (
               <div className="absolute flex flex-col right-0 top-full mt-1 bg-white dark:bg-gray-800 shadow-2xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden z-50 w-32 py-1 animate-fadeIn">
-                <button
-                  onClick={() => {
-                    window.location.href = `/api/notes/${note.id}/export/docx`;
-                    setExportSuccessTip(true);
-                    setTimeout(() => setExportSuccessTip(false), 4000);
-                    setShowExportMenu(false);
-                  }}
-                  className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 transition flex items-center space-x-1.5"
-                >
-                  <span>📄</span>
-                  <span>Word (.docx)</span>
-                </button>
-                <button
-                  onClick={() => {
-                    window.location.href = `/api/notes/${note.id}/export/md`;
-                    setShowExportMenu(false);
-                  }}
-                  className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 transition flex items-center space-x-1.5"
-                >
-                  <span>📝</span>
-                  <span>Markdown</span>
-                </button>
-                <button
-                  onClick={() => {
-                    window.location.href = `/api/notes/${note.id}/export/html`;
-                    setShowExportMenu(false);
-                  }}
-                  className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 transition flex items-center space-x-1.5"
-                >
-                  <span>🌐</span>
-                  <span>HTML</span>
-                </button>
-                <button
-                  onClick={() => {
-                    window.location.href = `/api/notes/${note.id}/export/txt`;
-                    setShowExportMenu(false);
-                  }}
-                  className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 transition flex items-center space-x-1.5"
-                >
-                  <span>📄</span>
-                  <span>纯文本</span>
-                </button>
+                {[
+                  ['docx', '📄', 'Word (.docx)'],
+                  ['md', '📝', 'Markdown'],
+                  ['html', '🌐', 'HTML'],
+                  ['txt', '📄', '纯文本']
+                ].map(([fmt, icon, label]) => (
+                  <button
+                    key={fmt}
+                    onClick={() => {
+                      window.location.href = `/api/notes/${note.id}/export/${fmt}`;
+                      if (fmt === 'docx') {
+                        setExportSuccessTip(true);
+                        setTimeout(() => setExportSuccessTip(false), 4000);
+                      }
+                      setShowExportMenu(false);
+                    }}
+                    className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 transition flex items-center space-x-1.5"
+                  >
+                    <span>{icon}</span>
+                    <span>{label}</span>
+                  </button>
+                ))}
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* 导出成功提示浮条 */}
       {exportSuccessTip && (
         <div className="bg-green-50 dark:bg-green-950/50 text-green-700 dark:text-green-300 text-xs px-4 py-1.5 flex items-center justify-between border-b border-green-200 dark:border-green-800 animate-fadeIn">
           <div className="flex items-center space-x-1.5">
@@ -720,7 +627,6 @@ function EditorCore({
         </div>
       )}
 
-      {/* AI 分析中提示 */}
       {isAIAnalyzing && (
         <div className="bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 text-xs px-4 py-1.5 flex items-center space-x-2 border-b border-purple-200 dark:border-purple-800 animate-pulse">
           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -728,7 +634,6 @@ function EditorCore({
         </div>
       )}
 
-      {/* 笔记标题与标签栏 */}
       <div className="px-8 pt-6 pb-2 shrink-0 space-y-3 bg-mac-editor dark:bg-mac-editorDark">
         <input
           type="text"
@@ -739,10 +644,8 @@ function EditorCore({
           className="w-full text-2xl font-bold bg-transparent text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none tracking-tight"
         />
 
-        {/* 标签栏与 AI 快捷算子 */}
         {!isPreviewMode && (
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-b border-gray-100 dark:border-gray-800/80 pb-3">
-            {/* 标签列表 */}
             <div className="flex flex-wrap items-center gap-1.5">
               <Tag className="w-3.5 h-3.5 text-gray-400 mr-0.5" />
               {tags.map((t, idx) => (
@@ -766,13 +669,12 @@ function EditorCore({
               />
             </div>
 
-            {/* AI 快捷操作卡片 */}
             <div className="flex items-center space-x-1 relative group">
               <button
                 onClick={() => handleRunAIAction('continue')}
                 disabled={isAIAnalyzing}
                 className="flex items-center space-x-1 px-2 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 rounded text-xs transition font-medium"
-                title="从当前光标处无缝流式插入生成内容"
+                title="从文末无缝流式插入生成内容"
               >
                 <span>⚡️ AI 续写</span>
               </button>
@@ -821,46 +723,24 @@ function EditorCore({
                 </button>
                 {showPolishMenu && (
                   <div className="absolute flex flex-col right-0 top-full mt-1 bg-white dark:bg-gray-800 shadow-2xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden z-50 w-36 py-1 animate-fadeIn">
-                    <button
-                      onClick={() => {
-                        handleRunAIAction('polish_formal');
-                        setShowPolishMenu(false);
-                      }}
-                      className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-gray-700 hover:text-emerald-600 transition flex items-center space-x-1.5"
-                    >
-                      <span>💼</span>
-                      <span>商务正式</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleRunAIAction('polish_concise');
-                        setShowPolishMenu(false);
-                      }}
-                      className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-gray-700 hover:text-emerald-600 transition flex items-center space-x-1.5"
-                    >
-                      <span>⚡️</span>
-                      <span>极简精炼</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleRunAIAction('polish_casual');
-                        setShowPolishMenu(false);
-                      }}
-                      className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-gray-700 hover:text-emerald-600 transition flex items-center space-x-1.5"
-                    >
-                      <span>💬</span>
-                      <span>轻松口语</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleRunAIAction('polish_academic');
-                        setShowPolishMenu(false);
-                      }}
-                      className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-gray-700 hover:text-emerald-600 transition flex items-center space-x-1.5"
-                    >
-                      <span>🎓</span>
-                      <span>学术专业</span>
-                    </button>
+                    {[
+                      ['polish_formal', '💼', '商务正式'],
+                      ['polish_concise', '⚡️', '极简精炼'],
+                      ['polish_casual', '💬', '轻松口语'],
+                      ['polish_academic', '🎓', '学术专业']
+                    ].map(([act, icon, label]) => (
+                      <button
+                        key={act}
+                        onClick={() => {
+                          handleRunAIAction(act);
+                          setShowPolishMenu(false);
+                        }}
+                        className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-gray-700 hover:text-emerald-600 transition flex items-center space-x-1.5"
+                      >
+                        <span>{icon}</span>
+                        <span>{label}</span>
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -878,96 +758,10 @@ function EditorCore({
         )}
       </div>
 
-      {/* 富文本所见即所得工具条 */}
-      {editor && !editor.isDestroyed && !isPreviewMode && (
-        <div className="px-8 py-1.5 flex items-center space-x-1 border-b border-gray-100 dark:border-gray-800 text-gray-500 dark:text-gray-400 text-xs shrink-0 bg-gray-50/50 dark:bg-gray-900/20">
-          <button
-            onClick={() => runEditorChain(chain => chain.toggleBold())}
-            className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${isFormatActive('bold') ? 'bg-gray-200 dark:bg-gray-700 text-blue-500 font-bold' : ''}`}
-            title="粗体"
-          >
-            <Bold className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => runEditorChain(chain => chain.toggleItalic())}
-            className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${isFormatActive('italic') ? 'bg-gray-200 dark:bg-gray-700 text-blue-500' : ''}`}
-            title="斜体"
-          >
-            <Italic className="w-3.5 h-3.5" />
-          </button>
-          <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700 mx-1" />
-          <button
-            onClick={() => runEditorChain(chain => chain.toggleUnderline())}
-            className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${isFormatActive('underline') ? 'bg-gray-200 dark:bg-gray-700 text-blue-500 font-bold' : ''}`}
-            title="下划线"
-          >
-            <UnderlineIcon className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => runEditorChain(chain => chain.toggleStrike())}
-            className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${isFormatActive('strike') ? 'bg-gray-200 dark:bg-gray-700 text-blue-500 font-bold' : ''}`}
-            title="删除线"
-          >
-            <Strikethrough className="w-3.5 h-3.5" />
-          </button>
-          <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700 mx-1" />
-          <button
-            onClick={() => runEditorChain(chain => chain.toggleHeading({ level: 1 }))}
-            className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${isFormatActive('heading', { level: 1 }) ? 'bg-gray-200 dark:bg-gray-700 text-blue-500 font-bold' : ''}`}
-            title="一级标题"
-          >
-            <Heading1 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => runEditorChain(chain => chain.toggleHeading({ level: 2 }))}
-            className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${isFormatActive('heading', { level: 2 }) ? 'bg-gray-200 dark:bg-gray-700 text-blue-500 font-bold' : ''}`}
-            title="二级标题"
-          >
-            <Heading2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => runEditorChain(chain => chain.toggleHeading({ level: 3 }))}
-            className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${isFormatActive('heading', { level: 3 }) ? 'bg-gray-200 dark:bg-gray-700 text-blue-500 font-bold' : ''}`}
-            title="三级标题"
-          >
-            <Heading3 className="w-3.5 h-3.5" />
-          </button>
-          <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700 mx-1" />
-          <button
-            onClick={() => runEditorChain(chain => chain.toggleBulletList())}
-            className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${isFormatActive('bulletList') ? 'bg-gray-200 dark:bg-gray-700 text-blue-500' : ''}`}
-            title="无序列表"
-          >
-            <List className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => runEditorChain(chain => chain.toggleOrderedList())}
-            className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${isFormatActive('orderedList') ? 'bg-gray-200 dark:bg-gray-700 text-blue-500' : ''}`}
-            title="有序列表"
-          >
-            <ListOrdered className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => runEditorChain(chain => chain.toggleCodeBlock())}
-            className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${isFormatActive('codeBlock') ? 'bg-gray-200 dark:bg-gray-700 text-blue-500' : ''}`}
-            title="代码块"
-          >
-            <Code className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => runEditorChain(chain => chain.toggleBlockquote())}
-            className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${isFormatActive('blockquote') ? 'bg-gray-200 dark:bg-gray-700 text-blue-500' : ''}`}
-            title="引用块"
-          >
-            <Quote className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => runEditorChain(chain => chain.setHorizontalRule())}
-            className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
-            title="分割线"
-          >
-            <Minus className="w-3.5 h-3.5" />
-          </button>
+      {!isPreviewMode && (
+        <div className="px-8 py-1.5 flex items-center space-x-2 border-b border-gray-100 dark:border-gray-800 text-gray-500 dark:text-gray-400 text-xs shrink-0 bg-gray-50/50 dark:bg-gray-900/20">
+          <Type className="w-3.5 h-3.5 text-blue-500" />
+          <span>输入 <kbd className="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 font-mono">/</kbd> 插入标题、列表、待办、表格、代码块</span>
           <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700 mx-1" />
           <button
             onClick={handleManualImageUpload}
@@ -976,8 +770,6 @@ function EditorCore({
           >
             <ImageIcon className="w-3.5 h-3.5" />
           </button>
-
-          {/* 🔗 插入双向链接按钮 */}
           <button
             onClick={() => setIsLinkPickerOpen(true)}
             className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-blue-500"
@@ -985,131 +777,53 @@ function EditorCore({
           >
             <Link2 className="w-3.5 h-3.5" />
           </button>
-
-          {/* 表格工具 */}
-          <div className="relative ml-1" ref={tableMenuRef}>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowTableMenu(!showTableMenu);
-              }}
-              className={`p-1.5 rounded flex items-center transition ${
-                showTableMenu
-                  ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-600 font-bold'
-                  : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-blue-500'
-              }`}
-              title="表格工具"
-            >
-              <TableIcon className="w-3.5 h-3.5" />
-              <ChevronDown className="w-2.5 h-2.5 ml-0.5" />
-            </button>
-            {showTableMenu && (
-              <div className="absolute flex flex-col left-0 top-full mt-1 bg-white dark:bg-gray-800 shadow-2xl border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden z-50 w-36 py-1 animate-fadeIn">
-                <button
-                  onClick={() => {
-                    runEditorChain(chain => chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }));
-                    setShowTableMenu(false);
-                  }}
-                  className="px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 transition flex items-center space-x-1.5 font-medium"
-                >
-                  <span>➕ 插入 3x3 表格</span>
-                </button>
-                <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
-                <button
-                  onClick={() => {
-                    runEditorChain(chain => chain.addColumnAfter());
-                    setShowTableMenu(false);
-                  }}
-                  className="px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 transition"
-                >
-                  右侧插入列
-                </button>
-                <button
-                  onClick={() => {
-                    runEditorChain(chain => chain.deleteColumn());
-                    setShowTableMenu(false);
-                  }}
-                  className="px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
-                >
-                  删除当前列
-                </button>
-                <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
-                <button
-                  onClick={() => {
-                    runEditorChain(chain => chain.addRowAfter());
-                    setShowTableMenu(false);
-                  }}
-                  className="px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 transition"
-                >
-                  下方插入行
-                </button>
-                <button
-                  onClick={() => {
-                    runEditorChain(chain => chain.deleteRow());
-                    setShowTableMenu(false);
-                  }}
-                  className="px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
-                >
-                  删除当前行
-                </button>
-                <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
-                <button
-                  onClick={() => {
-                    runEditorChain(chain => chain.deleteTable());
-                    setShowTableMenu(false);
-                  }}
-                  className="px-3 py-1.5 text-left text-xs text-red-600 font-bold hover:bg-red-50 dark:hover:bg-red-950/40 transition"
-                >
-                  🗑️ 删除整个表格
-                </button>
-              </div>
-            )}
-          </div>
+          <button
+            onClick={() => handleRunAIAction('polish')}
+            className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-emerald-500 flex items-center space-x-1"
+            title="润色全文"
+          >
+            <Wand2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => handleRunAIAction('expand')}
+            className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-cyan-500 flex items-center space-x-1"
+            title="扩写全文"
+          >
+            <BookOpenCheck className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => handleRunAIAction('correct')}
+            className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-red-500 flex items-center space-x-1"
+            title="语法纠错"
+          >
+            <CheckCheck className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
-      {/* 所见即所得编辑正文区域 */}
-      <div 
-        className="flex-1 overflow-y-auto cursor-text bg-white dark:bg-gray-900" 
-        onClick={(e) => {
-          // 点击内链标签直接跳转
-          const linkTarget = e.target.closest('[data-internal-link]');
-          if (linkTarget) {
-            const targetTitle = linkTarget.getAttribute('data-internal-link');
-            const matched = (allNotes || []).find(n => n.title.trim().toLowerCase() === targetTitle.trim().toLowerCase() || n.id === targetTitle);
-            if (matched && onSelectNote) {
-              onSelectNote(matched.id);
-              return;
-            }
-          }
-          if (editor && !editor.isDestroyed) {
-            try {
-              editor.commands.focus();
-            } catch (err) {}
-          }
-        }}
-      >
-        {editor && !editor.isDestroyed ? (
+      <div className="flex-1 overflow-y-auto cursor-text bg-white dark:bg-gray-900" onClick={handleWikiClick}>
+        {!editorReady ? (
+          <div className="p-8 text-gray-400 text-xs animate-pulse">正在准备编辑器...</div>
+        ) : (
           <>
-            <EditorContent editor={editor} />
-            {editor && !isPreviewMode && (
-              <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }} className="flex items-center space-x-1 bg-white dark:bg-gray-800 shadow-xl border border-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 z-50">
-                <button onClick={() => runEditorChain(chain => chain.toggleBold())} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${isFormatActive('bold') ? 'text-blue-500' : 'text-gray-600 dark:text-gray-300'}`}><Bold className="w-3.5 h-3.5" /></button>
-                <button onClick={() => runEditorChain(chain => chain.toggleItalic())} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${isFormatActive('italic') ? 'text-blue-500' : 'text-gray-600 dark:text-gray-300'}`}><Italic className="w-3.5 h-3.5" /></button>
-                <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
-                <button onClick={() => handleRunAIAction('polish')} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-emerald-500 flex items-center space-x-1 text-xs"><Wand2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">润色</span></button>
-                <button onClick={() => handleRunAIAction('expand')} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-cyan-500 flex items-center space-x-1 text-xs"><BookOpenCheck className="w-3.5 h-3.5" /><span className="hidden sm:inline">扩写</span></button>
-                <button onClick={() => handleRunAIAction('correct')} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-red-500 flex items-center space-x-1 text-xs"><CheckCheck className="w-3.5 h-3.5" /><span className="hidden sm:inline">纠错</span></button>
-              </BubbleMenu>
-            )}
+            <div className="bn-note-shell px-4 md:px-8 py-4">
+              <BlockNoteView
+                editor={editor}
+                theme={darkMode ? 'dark' : 'light'}
+                editable={!isPreviewMode}
+                onChange={() => {
+                  if (!hydratedRef.current) return;
+                  scheduleSave();
+                }}
+              />
+            </div>
 
-            {/* 🔗 底部反向引用 (Backlinks) 折叠面板 */}
             <div className="mx-8 my-8 pt-4 border-t border-gray-100 dark:border-gray-800">
-              <div 
+              <div
                 className="p-4 rounded-2xl bg-gray-50/80 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800/80 space-y-3 cursor-default"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div 
+                <div
                   className="flex items-center justify-between cursor-pointer select-none"
                   onClick={() => setShowBacklinks(!showBacklinks)}
                 >
@@ -1151,18 +865,15 @@ function EditorCore({
               </div>
             </div>
           </>
-        ) : (
-          <div className="p-8 text-gray-400 text-xs animate-pulse">正在准备编辑器...</div>
         )}
       </div>
 
-      {/* 双向链接选择器弹窗 */}
       {isLinkPickerOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fadeIn"
           onClick={() => setIsLinkPickerOpen(false)}
         >
-          <div 
+          <div
             className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col p-4 space-y-3"
             onClick={(e) => e.stopPropagation()}
           >
@@ -1191,13 +902,7 @@ function EditorCore({
                 .map(n => (
                   <button
                     key={n.id}
-                    onClick={() => {
-                      if (editor && !editor.isDestroyed) {
-                        editor.chain().focus().insertContent(` [[${n.title || '无标题笔记'}]] `).run();
-                      }
-                      setIsLinkPickerOpen(false);
-                      setLinkSearch('');
-                    }}
+                    onClick={() => insertWikiLink(n)}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs hover:bg-blue-50 dark:hover:bg-gray-800 hover:text-blue-600 transition flex items-center space-x-2 text-gray-700 dark:text-gray-200"
                   >
                     <BookOpen className="w-3.5 h-3.5 text-gray-400 shrink-0" />
@@ -1219,7 +924,6 @@ function EditorCore({
   );
 }
 
-// 🌟 锁定屏组件
 function LockScreen({ note, onVerifyPassword }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -1246,7 +950,7 @@ function LockScreen({ note, onVerifyPassword }) {
         <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-2">
           <Lock className="w-8 h-8 text-amber-500" />
         </div>
-        
+
         <div>
           <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200 truncate px-4">
             {note.title || '无标题笔记'}
@@ -1290,7 +994,6 @@ function LockScreen({ note, onVerifyPassword }) {
   );
 }
 
-// 🌟 导出外层组件：无笔记时纯展示 EmptyEditor，有笔记时独立 key 隔离渲染
 export default function Editor(props) {
   if (!props.note) {
     return <EmptyEditor />;

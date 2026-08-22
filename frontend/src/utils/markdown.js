@@ -71,3 +71,27 @@ export function makeSummary(markdown, limit = 150) {
   if (!markdown) return '';
   return markdown.replace(/[#*`>_\-\[\]()]/g, '').replace(/\s+/g, ' ').trim().slice(0, limit);
 }
+
+export function isBlockNoteDocument(parsed) {
+  return Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0]?.type === 'string' && parsed[0]?.id;
+}
+
+export function isTiptapDocument(parsed) {
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.type === 'doc';
+}
+
+export function noteJsonToMarkdown(contentJson, fallback = '') {
+  if (!contentJson) return fallback || '';
+  let parsed = contentJson;
+  if (typeof contentJson === 'string') {
+    try {
+      parsed = JSON.parse(contentJson);
+    } catch {
+      return contentJson || fallback || '';
+    }
+  }
+  if (isTiptapDocument(parsed)) {
+    return tiptapJsonToMarkdown(parsed) || fallback || '';
+  }
+  return fallback || '';
+}

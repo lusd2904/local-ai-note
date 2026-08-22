@@ -22,7 +22,7 @@ class AudioService:
         # 尝试调用 Whisper 接口转录
         if config["api_key"]:
             try:
-                client = await get_openai_client(config)
+                client = get_openai_client(config)
                 with open(audio_path, "rb") as audio_file:
                     transcript_resp = await client.audio.transcriptions.create(
                         model=whisper_model,
@@ -72,13 +72,23 @@ class AudioService:
         }
 
     @staticmethod
-    async def process_audio_record(record_id: str, db: Session) -> AudioRecord:
-        """完整的音频分析流水线：转录 -> AI 会议纪要提炼 -> 更新数据库"""
-        record = db.query(AudioRecord).filter(AudioRecord.id == record_id).first()
-        if not record:
-            raise ValueError(f"AudioRecord {record_id} not found")
+    async def process_audio_record(record_id: str, db: Optional[Session] = None) -> AudioRecord:
+        """完整的音频分析流水线：转录 -> AI 会议纪要提炼 -> 更新数据库。
 
+        后台任务必须自开 Session：请求级 session 会在 HTTP 响应后关闭。
+        """
+        from ..database import SessionLocal
+
+        own_session = db is None
+        if own_session:
+            db = SessionLocal()
+
+        record = None
         try:
+            record = db.query(AudioRecord).filter(AudioRecord.id == record_id).first()
+            if not record:
+                raise ValueError(f"AudioRecord {record_id} not found")
+
             record.status = "transcribing"
             db.commit()
 
@@ -102,8 +112,13 @@ class AudioService:
 
         except Exception as e:
             logger.error(f"Error processing audio record {record_id}: {e}")
-            record.status = "error"
-            record.error_msg = str(e)
-            db.commit()
-            db.refresh(record)
-            return record
+            if record is not None:
+                record.status = "error"
+                record.error_msg = str(e)
+                db.commit()
+                db.refresh(record)
+                return record
+            raise
+        finally:
+            if own_session:
+                db.close()

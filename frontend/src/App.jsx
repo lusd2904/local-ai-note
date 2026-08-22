@@ -1,20 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import Sidebar from './components/Sidebar';
 import NoteList from './components/NoteList';
-import Editor from './components/Editor';
-import AudioStudio from './components/AudioStudio';
-import AICopilotModal from './components/AICopilotModal';
-import MindMapModal from './components/MindMapModal';
-import SettingsModal from './components/SettingsModal';
-import SyncModal from './components/SyncModal';
-import GraphViewModal from './components/GraphViewModal';
-import MemoStreamView from './components/MemoStreamView';
-import ActivityHeatmap from './components/ActivityHeatmap';
-import DatabaseContainer from './components/database/DatabaseContainer';
 import ErrorBoundary from './components/ErrorBoundary';
-import AIConsultationView from './components/AIConsultationView';
-import EmbeddedWebAIView from './components/EmbeddedWebAIView';
 import CommandPalette from './components/CommandPalette';
+
+const Editor = lazy(() => import('./components/Editor'));
+
+const AudioStudio = lazy(() => import('./components/AudioStudio'));
+const AICopilotModal = lazy(() => import('./components/AICopilotModal'));
+const MindMapModal = lazy(() => import('./components/MindMapModal'));
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const SyncModal = lazy(() => import('./components/SyncModal'));
+const GraphViewModal = lazy(() => import('./components/GraphViewModal'));
+const MemoStreamView = lazy(() => import('./components/MemoStreamView'));
+const ActivityHeatmap = lazy(() => import('./components/ActivityHeatmap'));
+const DatabaseContainer = lazy(() => import('./components/database/DatabaseContainer'));
+const AIConsultationView = lazy(() => import('./components/AIConsultationView'));
+const EmbeddedWebAIView = lazy(() => import('./components/EmbeddedWebAIView'));
 import { 
   getNotebooks, createNotebook, updateNotebook, deleteNotebook,
   getNotes, getNote, getNoteStats, createNote, updateNote, deleteNote, restoreNote, emptyTrash,
@@ -100,7 +102,7 @@ export default function App() {
 
   const fetchDatabases = async () => {
     try {
-      const list = await getDatabases({ is_archived: false });
+      const list = await getDatabases({ is_archived: false, include_rows: false });
       setDatabases(list || []);
     } catch (err) {
       console.warn('Failed to fetch databases:', err);
@@ -204,14 +206,16 @@ export default function App() {
 
   const fetchAudioRecords = async () => {
     try {
-      const data = await getAudioRecords();
+      const data = await getAudioRecords(null, { lite: true });
       setAudioRecords(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch audio records:', err);
     }
   };
 
+  const fetchNotesSeqRef = useRef(0);
   const fetchNotes = async () => {
+    const seq = ++fetchNotesSeqRef.current;
     try {
       const params = {};
       if (searchKeyword.trim()) {
@@ -226,21 +230,21 @@ export default function App() {
         params.notebook_id = currentNotebookId;
       }
 
-      const noteList = await getNotes(params);
-      let safeNoteList = Array.isArray(noteList) ? noteList : [];
+      const notesPromise = getNotes(params);
+      const statsPromise = getNoteStats().catch(() => null);
+      const trashDbPromise = currentView === 'trash'
+        ? getDatabases({ is_archived: true, include_rows: false }).catch(() => [])
+        : Promise.resolve([]);
 
-      // 获取已归档/废纸篓数据表
-      let trashedDbs = [];
-      try {
-        trashedDbs = await getDatabases({ is_archived: true });
-      } catch (e) {
-        console.warn('Failed to fetch trashed databases:', e);
-      }
+      const [noteList, stats, trashedDbs] = await Promise.all([notesPromise, statsPromise, trashDbPromise]);
+      if (seq !== fetchNotesSeqRef.current) return;
+
+      let safeNoteList = Array.isArray(noteList) ? noteList : [];
 
       const formattedTrashedDbs = (trashedDbs || []).map(db => ({
         id: db.id,
         title: `${db.icon || '📊'} ${db.title}`,
-        content: db.description || `多维数据表 (包含 ${db.rows?.length || 0} 条记录)`,
+        content: db.description || `多维数据表 (包含 ${db.row_count ?? db.rows?.length ?? 0} 条记录)`,
         updated_at: db.updated_at,
         is_database: true,
         is_trashed: true,
@@ -265,18 +269,13 @@ export default function App() {
         setCurrentNote(null);
       }
 
-      try {
-        const stats = await getNoteStats();
-        const extraTrash = (trashedDbs || []).length;
+      if (stats) {
         setTotalCount(stats.total || 0);
-        setTrashCount((stats.trash || 0) + extraTrash);
+        setTrashCount((stats.trash || 0) + (trashedDbs || []).length);
         setStarredCount(stats.starred || 0);
-      } catch (e) {
+      } else {
         setTotalCount(safeNoteList.filter(n => !n.is_trashed).length);
       }
-
-      const nbData = await getNotebooks();
-      setNotebooks(Array.isArray(nbData) ? nbData : []);
     } catch (err) {
       console.error('Failed to fetch notes:', err);
     }
@@ -409,7 +408,6 @@ export default function App() {
 
   const handleMoveNoteToNotebook = async (noteId, notebookId) => {
     await handleUpdateNote(noteId, { notebook_id: notebookId });
-    await fetchNotes();
   };
 
   const handleToggleStar = async (id, isStarred) => {
@@ -472,12 +470,12 @@ export default function App() {
     if (!unlockedNoteIds.includes(noteId)) {
       setUnlockedNoteIds(prev => [...prev, noteId]);
     }
-    setNotes(notes.map(n => n.id === noteId ? { ...n, is_locked: true, content: '', summary: '🔒 此重要笔记已设置密码锁定保护' } : n));
+    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, is_locked: true, content: '', summary: '🔒 此重要笔记已设置密码锁定保护' } : n));
   };
 
   const handleLockNote = async (noteId, password) => {
     await lockNote(noteId, password);
-    setNotes(notes.map(n => n.id === noteId ? { ...n, is_locked: true, content: '', summary: '🔒 此重要笔记已设置密码锁定保护' } : n));
+    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, is_locked: true, content: '', summary: '🔒 此重要笔记已设置密码锁定保护' } : n));
     setCurrentNote(prev => ({ ...prev, is_locked: true }));
     if (currentNote?.id === noteId) {
       setUnlockedNotesCache(prev => ({ ...prev, [noteId]: { ...currentNote, is_locked: true } }));
@@ -489,7 +487,7 @@ export default function App() {
 
   const handleUnlockNote = async (noteId, password) => {
     const unlocked = await unlockNote(noteId, password);
-    setNotes(notes.map(n => n.id === noteId ? { ...n, ...unlocked, is_locked: false } : n));
+    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, ...unlocked, is_locked: false } : n));
     setCurrentNote(unlocked);
     setUnlockedNoteIds(prev => prev.filter(id => id !== noteId));
     setUnlockedNotesCache(prev => {
@@ -560,7 +558,7 @@ export default function App() {
       }
       if (meta && e.key.toLowerCase() === 'n' && !e.shiftKey) {
         e.preventDefault();
-        handleCreateNote();
+        createNoteRef.current?.();
         return;
       }
       if (meta && e.key.toLowerCase() === 'f') {
@@ -590,9 +588,12 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isPaletteOpen, currentView, currentNotebookId]);
 
+  const createNoteRef = useRef(handleCreateNote);
+  createNoteRef.current = handleCreateNote;
+
   useEffect(() => {
     window.__noteNative = {
-      newNote: () => handleCreateNote(),
+      newNote: () => createNoteRef.current?.(),
       focusSearch: () => document.getElementById('note-search-input')?.focus(),
       openSettings: () => setIsSettingsOpen(true),
       saveNow: () => window.__noteFlushSave?.(),
@@ -601,7 +602,7 @@ export default function App() {
       toggleDark: () => setDarkMode((v) => !v)
     };
     return () => { delete window.__noteNative; };
-  });
+  }, []);
 
   // 思维导图与 AI 助手弹窗触发
   const handleOpenMindMap = (content) => {
@@ -611,8 +612,12 @@ export default function App() {
 
   const handleInsertToNote = (textToInsert) => {
     if (!currentNote) return;
+    if (typeof window.__noteInsertMarkdown === 'function') {
+      window.__noteInsertMarkdown(textToInsert);
+      return;
+    }
     const newContent = (currentNote.content || '') + textToInsert;
-    handleUpdateNote(currentNote.id, { content: newContent, content_json: null });
+    handleUpdateNote(currentNote.id, { content: newContent });
   };
 
   // 获取当前中间栏标题
@@ -666,6 +671,7 @@ export default function App() {
         />
 
         {/* 2. 主区域：根据当前视图切换显示 笔记列表+编辑器 或 多维数据表 或 闪念速记流 或 录音工坊 或 AI 视图 */}
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs text-gray-400">正在加载视图...</div>}>
         {currentView === 'database' && currentDatabaseId ? (
           <DatabaseContainer
             databaseId={currentDatabaseId}
@@ -750,8 +756,10 @@ export default function App() {
             />
           </>
         )}
+        </Suspense>
 
         {/* 3. AI Copilot 侧边栏助手 */}
+        <Suspense fallback={null}>
         <AICopilotModal
           isOpen={isAIChatOpen}
           onClose={() => setIsAIChatOpen(false)}
@@ -800,11 +808,14 @@ export default function App() {
         />
 
         {/* 7. 全局 2D 交互式知识关系图谱弹窗 */}
-        <GraphViewModal
-          isOpen={isGraphModalOpen}
-          onClose={() => setIsGraphModalOpen(false)}
-          onSelectNote={handleSelectNote}
-        />
+        {isGraphModalOpen && (
+          <GraphViewModal
+            isOpen={isGraphModalOpen}
+            onClose={() => setIsGraphModalOpen(false)}
+            onSelectNote={handleSelectNote}
+          />
+        )}
+        </Suspense>
 
         {/* 8. 365 天创作打卡热力图浮层弹窗 */}
         {isHeatmapModalOpen && (
@@ -816,7 +827,9 @@ export default function App() {
               className="w-full max-w-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <ActivityHeatmap notes={notes} memos={memos} />
+              <Suspense fallback={<div className="text-xs text-white/80 p-6">正在加载热力图...</div>}>
+                <ActivityHeatmap notes={notes} memos={memos} />
+              </Suspense>
             </div>
           </div>
         )}
