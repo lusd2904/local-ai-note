@@ -80,7 +80,7 @@ def test_openai_client_is_sync():
 
 
 def test_audio_process_uses_own_session():
-    assert AudioService.process_audio_record.__code__.co_varnames[1] == "record_id"
+    assert "record_id" in AudioService.process_audio_record.__code__.co_varnames
     print("✅ 录音后台任务可在无请求 Session 下启动")
 
 

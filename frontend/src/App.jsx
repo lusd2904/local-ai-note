@@ -243,7 +243,7 @@ export default function App() {
       const formattedTrashedDbs = (trashedDbs || []).map(db => ({
         id: db.id,
         title: `${db.icon || '📊'} ${db.title}`,
-        content: db.description || `多维数据表 (包含 ${db.row_count ?? db.rows?.length || 0} 条记录)`,
+        content: db.description || `多维数据表 (包含 ${db.row_count ?? db.rows?.length ?? 0} 条记录)`,
         updated_at: db.updated_at,
         is_database: true,
         is_trashed: true,
