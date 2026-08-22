@@ -22,7 +22,7 @@ export const restoreNote = (id) => api.post(`/notes/${id}/restore`).then(res => 
 export const emptyTrash = () => api.delete('/notes/trash/empty').then(res => res.data);
 
 // 录音与音频工坊
-export const getAudioRecords = (noteId = null) => api.get('/audio', { params: { note_id: noteId } }).then(res => res.data);
+export const getAudioRecords = (noteId = null, extra = {}) => api.get('/audio', { params: { note_id: noteId, ...extra } }).then(res => res.data);
 export const getAudioRecord = (id) => api.get(`/audio/${id}`).then(res => res.data);
 export const uploadAudio = (formData) => api.post('/audio/upload', formData, {
   headers: { 'Content-Type': 'multipart/form-data' }

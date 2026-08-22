@@ -164,3 +164,18 @@ html {
   animation: fadeIn 0.2s ease-out;
 }
 
+/* BlockNote 与现有 macOS 工作区对齐 */
+.bn-note-shell .bn-container {
+  background: transparent !important;
+  font-family: inherit;
+}
+.bn-note-shell .bn-editor {
+  background: transparent !important;
+  padding-inline: 0;
+  min-height: 420px;
+}
+.bn-note-shell .bn-block-content {
+  font-size: 14px;
+  line-height: 1.7;
+}
+

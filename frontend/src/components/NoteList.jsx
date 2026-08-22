@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   Search, Plus, Star, Trash2, Mic,
   Clock, FileText, RotateCcw, Lock, Upload
@@ -23,13 +23,15 @@ export default function NoteList({
 
   const safeNotes = Array.isArray(notes) ? notes : [];
 
-  const sortedNotes = [...safeNotes].sort((a, b) => {
-    try {
-      return new Date(b.updated_at || 0) - new Date(a.updated_at || 0);
-    } catch (e) {
-      return 0;
-    }
-  });
+  const sortedNotes = useMemo(() => {
+    return [...safeNotes].sort((a, b) => {
+      try {
+        return new Date(b.updated_at || 0) - new Date(a.updated_at || 0);
+      } catch (e) {
+        return 0;
+      }
+    });
+  }, [safeNotes]);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';

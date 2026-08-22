@@ -6,8 +6,8 @@ import hashlib
 import re
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile, Form
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, desc, func
+from sqlalchemy.orm import Session, load_only
+from sqlalchemy import or_, desc, func, case, and_
 from ..database import get_db
 from ..models import Note, Notebook, AudioRecord, Database
 from ..schemas import (
@@ -136,16 +136,37 @@ def get_notes(
             )
         )
 
-    notes = query.order_by(desc(Note.updated_at)).all()
-
-    audio_counts = dict(
-        db.query(AudioRecord.note_id, func.count(AudioRecord.id))
-        .group_by(AudioRecord.note_id)
+    rows = (
+        query.with_entities(
+            Note.id,
+            Note.title,
+            Note.summary,
+            Note.tags,
+            Note.notebook_id,
+            Note.is_starred,
+            Note.is_trashed,
+            Note.is_locked,
+            Note.created_at,
+            Note.updated_at,
+            func.length(Note.content).label("content_length"),
+            func.substr(Note.content, 1, 240).label("content_preview"),
+        )
+        .order_by(desc(Note.updated_at))
         .all()
     )
 
+    note_ids = [n.id for n in rows]
+    audio_counts = {}
+    if note_ids:
+        audio_counts = dict(
+            db.query(AudioRecord.note_id, func.count(AudioRecord.id))
+            .filter(AudioRecord.note_id.in_(note_ids))
+            .group_by(AudioRecord.note_id)
+            .all()
+        )
+
     result = []
-    for n in notes:
+    for n in rows:
         tags_list = []
         try:
             tags_list = json.loads(n.tags) if n.tags else []
@@ -153,8 +174,7 @@ def get_notes(
             tags_list = []
 
         is_locked = bool(n.is_locked)
-        full_content = n.content or ""
-        preview = "" if is_locked else (n.summary or full_content[:240])
+        preview = "" if is_locked else (n.summary or (n.content_preview or ""))
         note_dict = {
             "id": n.id,
             "title": n.title,
@@ -169,7 +189,7 @@ def get_notes(
             "created_at": n.created_at,
             "updated_at": n.updated_at,
             "audio_count": int(audio_counts.get(n.id) or 0),
-            "content_length": 0 if is_locked else len(full_content),
+            "content_length": 0 if is_locked else int(n.content_length or 0),
         }
         result.append(note_dict)
     return result
@@ -177,16 +197,13 @@ def get_notes(
 
 @router.get("/stats", response_model=NoteStatsOut)
 def get_note_stats(db: Session = Depends(get_db)):
-    """一次查询返回侧栏计数，避免列表接口被重复打三次。"""
-    total = db.query(func.count(Note.id)).filter(Note.is_trashed == False).scalar() or 0
-    trash = db.query(func.count(Note.id)).filter(Note.is_trashed == True).scalar() or 0
-    starred = (
-        db.query(func.count(Note.id))
-        .filter(Note.is_trashed == False, Note.is_starred == True)
-        .scalar()
-        or 0
-    )
-    return {"total": int(total), "trash": int(trash), "starred": int(starred)}
+    """一次聚合查询返回侧栏计数。"""
+    total, trash, starred = db.query(
+        func.coalesce(func.sum(case((Note.is_trashed == False, 1), else_=0)), 0),
+        func.coalesce(func.sum(case((Note.is_trashed == True, 1), else_=0)), 0),
+        func.coalesce(func.sum(case((and_(Note.is_trashed == False, Note.is_starred == True), 1), else_=0)), 0),
+    ).one()
+    return {"total": int(total or 0), "trash": int(trash or 0), "starred": int(starred or 0)}
 
 @router.post("", response_model=NoteOut)
 def create_note(data: NoteCreate, db: Session = Depends(get_db)):
@@ -461,6 +478,8 @@ def export_note(note_id: str, format: str, db: Session = Depends(get_db)):
     note = db.query(Note).filter(Note.id == note_id).first()
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
+    if note.is_locked:
+        raise HTTPException(status_code=403, detail="已锁定笔记请先解锁后再导出")
 
     tags_list = []
     try:
@@ -601,10 +620,12 @@ async def batch_import(
             is_locked=False
         )
         db.add(new_note)
-        db.commit()
-        db.refresh(new_note)
+        created_notes.append(new_note)
 
-        created_notes.append({
+    db.flush()
+    result = []
+    for new_note in created_notes:
+        result.append({
             "id": new_note.id,
             "title": new_note.title,
             "content": new_note.content,
@@ -619,13 +640,19 @@ async def batch_import(
             "updated_at": new_note.updated_at,
             "audio_count": 0
         })
-    return created_notes
+    db.commit()
+    return result
 
 
 @router.get("/graph/data", response_model=GraphDataOut)
 def get_knowledge_graph(db: Session = Depends(get_db)):
     """获取全局知识图谱节点与连线数据 (解析 [[双向链接]] 与 #标签 关联)"""
-    notes = db.query(Note).filter(Note.is_trashed == False).all()
+    notes = (
+        db.query(Note)
+        .options(load_only(Note.id, Note.title, Note.content, Note.tags, Note.notebook_id))
+        .filter(Note.is_trashed == False)
+        .all()
+    )
     notebooks = {nb.id: nb.name for nb in db.query(Notebook).all()}
     
     # 建立标题 -> Note ID 和 ID -> Note 的映射
@@ -720,7 +747,15 @@ def get_note_backlinks(note_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="笔记不存在")
 
     current_title = current_note.title.strip() if current_note.title else ""
-    all_notes = db.query(Note).filter(Note.id != note_id, Note.is_trashed == False).all()
+    like_filters = [Note.content.like(f"%[[{note_id}]]%")]
+    if current_title:
+        like_filters.append(Note.content.ilike(f"%[[{current_title}]]%"))
+    all_notes = (
+        db.query(Note)
+        .options(load_only(Note.id, Note.title, Note.content, Note.updated_at))
+        .filter(Note.id != note_id, Note.is_trashed == False, or_(*like_filters))
+        .all()
+    )
 
     backlinks: List[BacklinkItem] = []
     # 匹配 [[当前笔记标题]] 或 [[当前笔记ID]]

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   BookOpen, Folder, FolderPlus, Star, Trash2, Mic, 
   Settings, Moon, Sun, ChevronRight, ChevronDown, Plus, 
-  Edit2, Check, X, CornerDownRight, Bot, Sparkles, ExternalLink, Globe,
+  Edit2, Check, X, CornerDownRight, Bot,
   ArrowRightLeft, Zap, Share2, Flame, Table, Upload, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 
@@ -252,7 +252,7 @@ export default function Sidebar({
   const [databasesExpanded, setDatabasesExpanded] = useState(true);
   const [aiSectionExpanded, setAiSectionExpanded] = useState(true);
 
-  const notebookTree = buildTree(notebooks || []);
+  const notebookTree = useMemo(() => buildTree(notebooks || []), [notebooks]);
 
   // 打开创建分类弹窗
   const handleOpenCreateModal = (defaultParentId = null) => {
@@ -594,9 +594,9 @@ export default function Sidebar({
                     </div>
 
                     <div className="flex items-center space-x-1 shrink-0 ml-1.5">
-                      {db.rows && db.rows.length > 0 && (
+                      {(db.row_count ?? db.rows?.length ?? 0) > 0 && (
                         <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500 font-mono group-hover:hidden">
-                          {db.rows.length}
+                          {db.row_count ?? db.rows.length}
                         </span>
                       )}
                       {onDeleteDatabase && (

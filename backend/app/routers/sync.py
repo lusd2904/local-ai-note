@@ -130,9 +130,9 @@ def _serialize_note(n, include_password_hash: bool = False) -> dict:
         "id": n.id,
         "notebook_id": n.notebook_id,
         "title": n.title,
-        "content": n.content,
-        "content_json": n.content_json,
-        "summary": n.summary,
+        "content": "" if n.is_locked else n.content,
+        "content_json": "" if n.is_locked else n.content_json,
+        "summary": "🔒 此重要笔记已设置密码锁定保护" if n.is_locked else n.summary,
         "tags": tags,
         "is_starred": bool(n.is_starred),
         "is_trashed": bool(n.is_trashed),
@@ -349,12 +349,43 @@ def sync_two_way(data: SyncTwoWayRequest, db: Session = Depends(get_db)):
     inserted_notebooks = 0
     updated_notebooks = 0
 
+    nb_ids = [nb.get("id") for nb in data.notebooks if nb.get("id")]
+    existing_nbs = (
+        {n.id: n for n in db.query(Notebook).filter(Notebook.id.in_(nb_ids)).all()}
+        if nb_ids else {}
+    )
+    note_ids = [n.get("id") for n in data.notes if n.get("id")]
+    existing_notes = (
+        {n.id: n for n in db.query(Note).filter(Note.id.in_(note_ids)).all()}
+        if note_ids else {}
+    )
+    memo_ids = [m.get("id") for m in data.memos if m.get("id")]
+    existing_memos = (
+        {m.id: m for m in db.query(Memo).filter(Memo.id.in_(memo_ids)).all()}
+        if memo_ids else {}
+    )
+    del_note_ids = [i for i in (data.deleted_note_ids or []) if i]
+    del_notes = (
+        {n.id: n for n in db.query(Note).filter(Note.id.in_(del_note_ids)).all()}
+        if del_note_ids else {}
+    )
+    del_nb_ids = [i for i in (data.deleted_notebook_ids or []) if i]
+    del_nbs = (
+        {n.id: n for n in db.query(Notebook).filter(Notebook.id.in_(del_nb_ids)).all()}
+        if del_nb_ids else {}
+    )
+    del_memo_ids = [i for i in (data.deleted_memo_ids or []) if i]
+    del_memos = (
+        {m.id: m for m in db.query(Memo).filter(Memo.id.in_(del_memo_ids)).all()}
+        if del_memo_ids else {}
+    )
+
     # 1. 批量合并客户端推上来的笔记本
     for nb_data in data.notebooks:
         nb_id = nb_data.get("id")
         if not nb_id:
             continue
-        existing_nb = db.query(Notebook).filter(Notebook.id == nb_id).first()
+        existing_nb = existing_nbs.get(nb_id)
         client_updated = parse_iso_datetime(nb_data.get("updated_at")) or sync_now
 
         if existing_nb:
@@ -385,7 +416,7 @@ def sync_two_way(data: SyncTwoWayRequest, db: Session = Depends(get_db)):
         note_id = note_data.get("id")
         if not note_id:
             continue
-        existing_note = db.query(Note).filter(Note.id == note_id).first()
+        existing_note = existing_notes.get(note_id)
         client_updated = parse_iso_datetime(note_data.get("updated_at")) or sync_now
 
         tags_str = "[]"
@@ -433,7 +464,7 @@ def sync_two_way(data: SyncTwoWayRequest, db: Session = Depends(get_db)):
         memo_id = memo_data.get("id")
         if not memo_id:
             continue
-        existing_memo = db.query(Memo).filter(Memo.id == memo_id).first()
+        existing_memo = existing_memos.get(memo_id)
         client_updated = parse_iso_datetime(memo_data.get("updated_at")) or sync_now
 
         tags_str = json.dumps(memo_data.get("tags") or [], ensure_ascii=False) if isinstance(memo_data.get("tags"), list) else memo_data.get("tags", "[]")
@@ -461,19 +492,19 @@ def sync_two_way(data: SyncTwoWayRequest, db: Session = Depends(get_db)):
             db.add(new_memo)
 
     # 4. 处理客户端提交的删除 ID
-    for del_id in data.deleted_note_ids:
-        del_note = db.query(Note).filter(Note.id == del_id).first()
+    for del_id in del_note_ids:
+        del_note = del_notes.get(del_id)
         if del_note:
             del_note.is_trashed = True
             del_note.updated_at = sync_now
 
-    for del_nb_id in data.deleted_notebook_ids:
-        del_nb = db.query(Notebook).filter(Notebook.id == del_nb_id).first()
+    for del_nb_id in del_nb_ids:
+        del_nb = del_nbs.get(del_nb_id)
         if del_nb:
             db.delete(del_nb)
 
-    for del_memo_id in data.deleted_memo_ids:
-        del_memo = db.query(Memo).filter(Memo.id == del_memo_id).first()
+    for del_memo_id in del_memo_ids:
+        del_memo = del_memos.get(del_memo_id)
         if del_memo:
             db.delete(del_memo)
 

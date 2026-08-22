@@ -14,7 +14,7 @@ from ..config import AUDIO_DIR
 
 router = APIRouter(prefix="/api/audio", tags=["Audio & Meeting Minutes"])
 
-def format_record_dict(record: AudioRecord) -> dict:
+def format_record_dict(record: AudioRecord, lite: bool = False) -> dict:
     segments = []
     action_items = []
     try:
@@ -38,23 +38,27 @@ def format_record_dict(record: AudioRecord) -> dict:
         "file_size": record.file_size,
         "duration": record.duration,
         "mime_type": record.mime_type,
-        "transcription": record.transcription,
-        "transcription_segments": segments,
-        "ai_summary": record.ai_summary,
-        "action_items": action_items,
+        "transcription": "" if lite else record.transcription,
+        "transcription_segments": [] if lite else segments,
+        "ai_summary": "" if lite else record.ai_summary,
+        "action_items": [] if lite else action_items,
         "status": record.status,
         "error_msg": record.error_msg,
         "created_at": record.created_at
     }
 
 @router.get("", response_model=List[AudioRecordOut])
-def get_all_audio_records(note_id: Optional[str] = None, db: Session = Depends(get_db)):
-    """获取录音列表（可选按 note_id 过滤）"""
+def get_all_audio_records(
+    note_id: Optional[str] = None,
+    lite: bool = False,
+    db: Session = Depends(get_db)
+):
+    """获取录音列表（可选按 note_id 过滤；lite=True 时省略逐字稿等大字段）"""
     query = db.query(AudioRecord)
     if note_id:
         query = query.filter(AudioRecord.note_id == note_id)
     records = query.order_by(desc(AudioRecord.created_at)).all()
-    return [format_record_dict(r) for r in records]
+    return [format_record_dict(r, lite=lite) for r in records]
 
 @router.get("/{record_id}", response_model=AudioRecordOut)
 def get_audio_record(record_id: str, db: Session = Depends(get_db)):
@@ -98,7 +102,7 @@ async def upload_audio(
 
     if auto_process:
         # 异步执行 ASR 转录与 AI 纪要提炼
-        background_tasks.add_task(AudioService.process_audio_record, record.id, db)
+        background_tasks.add_task(AudioService.process_audio_record, record.id)
 
     return format_record_dict(record)
 
@@ -112,7 +116,7 @@ async def process_audio(record_id: str, background_tasks: BackgroundTasks, db: S
     record.status = "processing"
     db.commit()
 
-    background_tasks.add_task(AudioService.process_audio_record, record.id, db)
+    background_tasks.add_task(AudioService.process_audio_record, record.id)
     return format_record_dict(record)
 
 @router.post("/{record_id}/convert-to-note")

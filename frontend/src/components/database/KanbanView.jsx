@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
   Plus, MoreHorizontal, Calendar, Tag, 
   Layers, Hash, ArrowRight, Maximize2, Trash2
@@ -67,11 +67,22 @@ export default function KanbanView({
     setQuickTitle({ ...quickTitle, [statusId]: '' });
   };
 
+  const rowsByLane = useMemo(() => {
+    const grouped = {};
+    options.forEach(opt => { grouped[opt.id] = []; });
+    const fallbackId = options[0].id;
+    rows.forEach(r => {
+      const key = r.properties?.[groupCol.id] || fallbackId;
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(r);
+    });
+    return grouped;
+  }, [rows, options, groupCol.id]);
+
   return (
     <div className="flex items-start space-x-4 p-4 overflow-x-auto min-h-[600px] select-none">
       {options.map((opt) => {
-        // 筛选属于当前状态泳道的记录
-        const laneRows = rows.filter(r => (r.properties?.[groupCol.id] || options[0].id) === opt.id);
+        const laneRows = rowsByLane[opt.id] || [];
 
         return (
           <div

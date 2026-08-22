@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { 
-  X, Maximize2, Minimize2, RefreshCw, ZoomIn, ZoomOut, 
-  Layers, Search, Share2, Tag, BookOpen, Info
+  X, Maximize2, Minimize2, RefreshCw,
+  Share2, Tag, BookOpen
 } from 'lucide-react';
 import { getKnowledgeGraph } from '../api/client';
 import { localDb } from '../services/localDb';
@@ -11,9 +11,11 @@ export default function GraphViewModal({ isOpen, onClose, onSelectNote }) {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [searchFilter, setSearchFilter] = useState('');
   const [showTags, setShowTags] = useState(true);
   const [hoveredNode, setHoveredNode] = useState(null);
+  const hoveredNodeRef = useRef(null);
+  const showTagsRef = useRef(true);
+  showTagsRef.current = showTags;
 
   // 物理引擎与视口状态
   const transformRef = useRef({ x: 0, y: 0, scale: 1 });
@@ -154,9 +156,10 @@ export default function GraphViewModal({ isOpen, onClose, onSelectNote }) {
       const source = typeof l.source === 'object' ? l.source : nodeMap[l.source];
       const target = typeof l.target === 'object' ? l.target : nodeMap[l.target];
       if (!source || !target) return;
-      if (!showTags && (source.group === 'tag' || target.group === 'tag')) return;
+      if (!showTagsRef.current && (source.group === 'tag' || target.group === 'tag')) return;
 
-      const isConnected = hoveredNode && (source.id === hoveredNode.id || target.id === hoveredNode.id);
+      const hover = hoveredNodeRef.current;
+      const isConnected = hover && (source.id === hover.id || target.id === hover.id);
       
       ctx.beginPath();
       ctx.moveTo(source.x, source.y);
@@ -170,12 +173,15 @@ export default function GraphViewModal({ isOpen, onClose, onSelectNote }) {
 
     // 4. 绘制节点与文字
     nodes.forEach(n => {
-      if (!showTags && n.group === 'tag') return;
-      const isHovered = hoveredNode && hoveredNode.id === n.id;
-      const isConnected = hoveredNode && links.some(l => 
-        (l.source === hoveredNode.id && l.target === n.id) ||
-        (l.target === hoveredNode.id && l.source === n.id)
-      );
+      if (!showTagsRef.current && n.group === 'tag') return;
+      const hover = hoveredNodeRef.current;
+      const hoverId = hover?.id;
+      const isHovered = hover && hover.id === n.id;
+      const isConnected = hover && links.some(l => {
+        const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+        const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+        return (sourceId === hoverId && targetId === n.id) || (targetId === hoverId && sourceId === n.id);
+      });
 
       // 发光与填充
       ctx.beginPath();
@@ -202,7 +208,7 @@ export default function GraphViewModal({ isOpen, onClose, onSelectNote }) {
 
     ctx.restore();
     animFrameRef.current = requestAnimationFrame(render);
-  }, [showTags, hoveredNode]);
+  }, []);
 
   // 启动渲染循环
   useEffect(() => {
@@ -274,7 +280,11 @@ export default function GraphViewModal({ isOpen, onClose, onSelectNote }) {
       const dy = n.y - y;
       return Math.sqrt(dx * dx + dy * dy) <= n.radius * 1.5;
     });
-    setHoveredNode(hovered || null);
+    const nextId = hovered?.id || null;
+    if (nextId !== (hoveredNodeRef.current?.id || null)) {
+      hoveredNodeRef.current = hovered || null;
+      setHoveredNode(hovered || null);
+    }
   };
 
   const handleMouseUp = (e) => {

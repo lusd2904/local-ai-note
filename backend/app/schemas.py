@@ -372,6 +372,7 @@ class DatabaseOut(BaseModel):
     views: List[ViewConfig]
     notebook_id: Optional[str]
     rows: List[DatabaseRowOut] = []
+    row_count: Optional[int] = 0
     created_at: datetime
     updated_at: datetime
 

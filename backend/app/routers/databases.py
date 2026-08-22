@@ -3,7 +3,8 @@ import logging
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import func
 from ..database import get_db
 from ..models import Database, DatabaseRow
 from ..schemas import (
@@ -133,23 +134,27 @@ DEFAULT_SAMPLE_ROWS = [
 ]
 
 
-def _serialize_database_out(db_item: Database) -> dict:
+def _serialize_database_out(db_item: Database, include_rows: bool = True, row_count: Optional[int] = None) -> dict:
     """序列化 Database 对象"""
     schema_list = json.loads(db_item.schema_json or "[]")
     views_list = json.loads(db_item.views_json or "[]")
     
     rows_out = []
-    for r in (db_item.rows or []):
-        rows_out.append({
-            "id": r.id,
-            "database_id": r.database_id,
-            "properties": json.loads(r.properties_json or "{}"),
-            "content": r.content or "",
-            "content_json": r.content_json or "",
-            "order_index": r.order_index or 0.0,
-            "created_at": r.created_at,
-            "updated_at": r.updated_at
-        })
+    if include_rows:
+        for r in (db_item.rows or []):
+            rows_out.append({
+                "id": r.id,
+                "database_id": r.database_id,
+                "properties": json.loads(r.properties_json or "{}"),
+                "content": r.content or "",
+                "content_json": r.content_json or "",
+                "order_index": r.order_index or 0.0,
+                "created_at": r.created_at,
+                "updated_at": r.updated_at
+            })
+        computed_count = len(rows_out)
+    else:
+        computed_count = int(row_count or 0)
 
     return {
         "id": db_item.id,
@@ -160,6 +165,7 @@ def _serialize_database_out(db_item: Database) -> dict:
         "views": views_list,
         "notebook_id": db_item.notebook_id,
         "rows": rows_out,
+        "row_count": computed_count,
         "created_at": db_item.created_at,
         "updated_at": db_item.updated_at
     }
@@ -169,14 +175,27 @@ def _serialize_database_out(db_item: Database) -> dict:
 def get_databases(
     notebook_id: Optional[str] = None,
     is_archived: bool = Query(False, description="是否获取已删除/归档的数据表"),
+    include_rows: bool = Query(True, description="是否附带全部行数据；侧栏列表可关闭以减小载荷"),
     db: Session = Depends(get_db)
 ):
     """获取数据表列表 (默认获取活跃表，is_archived=True 时获取废纸篓表)"""
     query = db.query(Database).filter(Database.is_archived == is_archived)
     if notebook_id:
         query = query.filter(Database.notebook_id == notebook_id)
+    if include_rows:
+        query = query.options(selectinload(Database.rows))
     databases = query.order_by(Database.created_at.asc()).all()
-    return [_serialize_database_out(d) for d in databases]
+    if include_rows:
+        return [_serialize_database_out(d) for d in databases]
+    counts = dict(
+        db.query(DatabaseRow.database_id, func.count(DatabaseRow.id))
+        .group_by(DatabaseRow.database_id)
+        .all()
+    )
+    return [
+        _serialize_database_out(d, include_rows=False, row_count=int(counts.get(d.id) or 0))
+        for d in databases
+    ]
 
 
 
@@ -296,9 +315,8 @@ def create_database_row(
     if not db_item:
         raise HTTPException(status_code=404, detail="数据表不存在")
 
-    # 获取当前最大 order_index
-    max_order = db.query(DatabaseRow).filter(DatabaseRow.database_id == id).order_by(DatabaseRow.order_index.desc()).first()
-    next_order = (max_order.order_index + 1.0) if max_order else 1.0
+    max_order = db.query(func.max(DatabaseRow.order_index)).filter(DatabaseRow.database_id == id).scalar()
+    next_order = (max_order + 1.0) if max_order is not None else 1.0
 
     new_row = DatabaseRow(
         database_id=id,

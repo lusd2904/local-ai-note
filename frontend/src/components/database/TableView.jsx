@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Plus, ChevronDown, 
   Trash2, Maximize2, Calendar, Tag, 
@@ -76,9 +76,6 @@ export default function TableView({
   const [activeHeaderDropdown, setActiveHeaderDropdown] = useState(null); // colId
   const [hoveredRowId, setHoveredRowId] = useState(null);
 
-  // debounce 定时器引用
-  const debounceTimerRef = useRef(null);
-
   // 全局点击外部区域自动收起所有单元格和表头下拉菜单
   React.useEffect(() => {
     const handleGlobalClick = (e) => {
@@ -101,16 +98,22 @@ export default function TableView({
     onUpdateRow(rowId, { properties: nextProps });
   };
 
-  // 带 debounce 的提交（用于 text、number 等连续输入类型）
-  const handleCellChangeDebounced = useCallback((rowId, colId, value) => {
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = setTimeout(() => {
-      const targetRow = rows.find(r => r.id === rowId);
-      if (!targetRow) return;
-      const nextProps = { ...targetRow.properties, [colId]: value };
-      onUpdateRow(rowId, { properties: nextProps });
-    }, 400);
-  }, [rows, onUpdateRow]);
+  const footerStats = React.useMemo(() => {
+    return database.schema.slice(1).map((col) => {
+      if (col.type === 'number') {
+        const nums = rows.map(r => Number(r.properties?.[col.id]) || 0);
+        const sum = nums.reduce((a, b) => a + b, 0);
+        const avg = rows.length > 0 ? (sum / rows.length).toFixed(1) : 0;
+        return { col, kind: 'number', avg };
+      }
+      if (col.type === 'checkbox') {
+        const checkedCount = rows.filter(r => Boolean(r.properties?.[col.id])).length;
+        const pct = rows.length > 0 ? Math.round((checkedCount / rows.length) * 100) : 0;
+        return { col, kind: 'checkbox', pct };
+      }
+      return { col, kind: 'empty' };
+    });
+  }, [rows, database.schema]);
 
   const getColIcon = (type) => {
     switch (type) {
@@ -438,30 +441,21 @@ export default function TableView({
             <td className="px-3 py-2 text-center font-mono text-[10px]">∑</td>
             <td className="px-3 py-2 font-mono text-[11px]">共 {rows.length} 条记录</td>
 
-            {database.schema.slice(1).map((col) => {
-              // 若为数字列，计算求和与平均值
-              if (col.type === 'number') {
-                const nums = rows.map(r => Number(r.properties?.[col.id]) || 0);
-                const sum = nums.reduce((a, b) => a + b, 0);
-                const avg = rows.length > 0 ? (sum / rows.length).toFixed(1) : 0;
+            {footerStats.map(({ col, kind, avg, pct }) => {
+              if (kind === 'number') {
                 return (
                   <td key={col.id} className="px-3 py-2 font-mono text-[11px] text-blue-600 dark:text-blue-400">
                     均值: {avg}{col.format === 'percent' ? '%' : ''}
                   </td>
                 );
               }
-
-              // 若为复选框，计算完成百分比
-              if (col.type === 'checkbox') {
-                const checkedCount = rows.filter(r => Boolean(r.properties?.[col.id])).length;
-                const pct = rows.length > 0 ? Math.round((checkedCount / rows.length) * 100) : 0;
+              if (kind === 'checkbox') {
                 return (
                   <td key={col.id} className="px-3 py-2 font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
                     已勾选: {pct}%
                   </td>
                 );
               }
-
               return <td key={col.id} className="px-3 py-2"></td>;
             })}
 
